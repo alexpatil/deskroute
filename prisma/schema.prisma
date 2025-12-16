@@ -1,0 +1,131 @@
+// prisma/schema.prisma
+
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "postgresql"
+}
+
+enum UserRole {
+    SYSTEM_ADMIN
+    STAFF
+    ADMIN
+}
+
+enum LocationType {
+    OFFICE
+    RTO
+}
+
+model User {
+    id                   String        @id @default(cuid())
+    email                String        @unique
+    passwordHash         String
+    role                 UserRole      @default(STAFF)
+    organizationId       String?
+    organization         Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    assignedLocationId   String?
+    assignedLocation     Location?     @relation(fields: [assignedLocationId], references: [id], onDelete: SetNull)
+    canViewAllFiles      Boolean       @default(false)
+    canManageOffices     Boolean       @default(false)
+    canManageStaff       Boolean       @default(false)
+    canConfigureStatuses Boolean       @default(false)
+    canManageLocations   Boolean       @default(false)
+    createdAt            DateTime      @default(now())
+    updatedAt            DateTime      @updatedAt
+
+    @@index([email])
+    @@index([organizationId])
+    @@index([assignedLocationId])
+}
+
+model Organization {
+    id           String       @id @default(cuid())
+    name         String
+    ownerUserId  String       @unique
+    users        User[]
+    locations    Location[]
+    files        File[]
+    fileStatuses FileStatus[]
+    createdAt    DateTime     @default(now())
+    updatedAt    DateTime     @updatedAt
+
+    @@index([ownerUserId])
+}
+
+model Location {
+    id              String        @id @default(cuid())
+    name            String
+    type            LocationType
+    organizationId  String
+    organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    assignedUsers   User[]
+    filesAtLocation File[]        @relation("FileCurrentLocation")
+    historyFrom     FileHistory[] @relation("HistoryFromLocation")
+    historyTo       FileHistory[] @relation("HistoryToLocation")
+    createdAt       DateTime      @default(now())
+    updatedAt       DateTime      @updatedAt
+
+    @@index([organizationId])
+    @@index([type])
+}
+
+model FileStatus {
+    id             String        @id @default(cuid())
+    name           String
+    isEnabled      Boolean       @default(true)
+    organizationId String
+    organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    files          File[]
+    history        FileHistory[]
+    createdAt      DateTime      @default(now())
+    updatedAt      DateTime      @updatedAt
+
+    @@index([organizationId])
+    @@index([isEnabled])
+}
+
+model File {
+    id                String        @id @default(cuid())
+    clientName        String
+    serviceType       String
+    currentLocationId String
+    currentLocation   Location      @relation("FileCurrentLocation", fields: [currentLocationId], references: [id])
+    currentStatusId   String
+    currentStatus     FileStatus    @relation(fields: [currentStatusId], references: [id])
+    isCompleted       Boolean       @default(false)
+    completedAt       DateTime?
+    organizationId    String
+    organization      Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    history           FileHistory[]
+    createdAt         DateTime      @default(now())
+    updatedAt         DateTime      @updatedAt
+
+    @@index([organizationId])
+    @@index([isCompleted])
+    @@index([currentLocationId])
+    @@index([currentStatusId])
+}
+
+model FileHistory {
+    id              String     @id @default(cuid())
+    fileId          String
+    file            File       @relation(fields: [fileId], references: [id], onDelete: Cascade)
+    fromLocationId  String?
+    fromLocation    Location?  @relation("HistoryFromLocation", fields: [fromLocationId], references: [id], onDelete: SetNull)
+    toLocationId    String
+    toLocation      Location   @relation("HistoryToLocation", fields: [toLocationId], references: [id])
+    statusId        String
+    status          FileStatus @relation(fields: [statusId], references: [id])
+    locationChanged Boolean    @default(true)
+    statusChanged   Boolean    @default(true)
+    oldStatusName   String?
+    newStatusName   String?
+    createdAt       DateTime   @default(now())
+
+    @@index([fileId])
+    @@index([toLocationId])
+    @@index([statusId])
+}
