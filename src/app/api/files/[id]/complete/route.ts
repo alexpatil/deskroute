@@ -1,18 +1,16 @@
 // app/api/files/[id]/complete/route.ts
-import { requireAuth } from '@/lib/authMiddleware';
-import prisma from '@/lib/prisma';
-import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth } from "@/lib/authMiddleware";
+import prisma from "@/lib/prisma";
+import { NextRequest, NextResponse } from "next/server";
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { user, error } = await requireAuth(request);
   if (error) return error;
 
   try {
+    const { id } = await params;
     const file = await prisma.file.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         currentStatus: true,
         currentLocation: true,
@@ -20,21 +18,15 @@ export async function POST(
     });
 
     if (!file || file.organizationId !== user!.organizationId) {
-      return NextResponse.json(
-        { message: 'File not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ message: "File not found" }, { status: 404 });
     }
 
     if (file.isCompleted) {
-      return NextResponse.json(
-        { message: 'File is already completed' },
-        { status: 400 }
-      );
+      return NextResponse.json({ message: "File is already completed" }, { status: 400 });
     }
 
     await prisma.file.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         isCompleted: true,
         completedAt: new Date(),
@@ -44,10 +36,7 @@ export async function POST(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Complete file error:', error);
-    return NextResponse.json(
-      { message: 'Internal server error' },
-      { status: 500 }
-    );
+    console.error("Complete file error:", error);
+    return NextResponse.json({ message: "Internal server error" }, { status: 500 });
   }
 }
