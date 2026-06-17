@@ -2,7 +2,7 @@
 "use client";
 
 import { Button } from "@/components/Button";
-import { httpService } from "@/lib/httpService";
+import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -19,20 +19,20 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const response = await httpService.post<{
-        success: boolean;
-        hasOrganization: boolean;
-        isSystemAdmin: boolean;
-      }>("/api/auth/login", { email, password });
+      const { data, error: signInError } = await authClient.signIn.email({ email, password });
 
-      if (response.success) {
-        if (response.isSystemAdmin) {
-          router.push("/system/organizations");
-        } else if (response.hasOrganization) {
-          router.push("/dashboard");
-        } else {
-          router.push("/onboarding");
-        }
+      if (signInError) {
+        setError(signInError.message || "Invalid credentials");
+        return;
+      }
+
+      const user = data?.user as any;
+      if (user?.role === "SYSTEM_ADMIN") {
+        router.push("/system/organizations");
+      } else if (user?.organizationId) {
+        router.push("/dashboard");
+      } else {
+        router.push("/onboarding");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
@@ -42,98 +42,83 @@ export default function LoginPage() {
   };
 
   return (
-    <div className='min-h-screen flex items-center justify-center px-4' style={{ backgroundColor: "var(--color-background)" }}>
-      <div className='max-w-md w-full space-y-8'>
-        <div className='text-center'>
+    <div
+      className="min-h-screen flex items-center justify-center px-4"
+      style={{ backgroundColor: "var(--color-background)" }}>
+      <div className="w-full max-w-sm animate-fade-in">
+        {/* Logo */}
+        <div className="flex flex-col items-center mb-8">
           <div
-            className='w-16 h-16 rounded-2xl flex items-center justify-center font-bold text-2xl text-white mx-auto mb-4'
+            className="w-10 h-10 rounded-xl flex items-center justify-center mb-4"
             style={{ backgroundColor: "var(--color-primary)" }}>
-            <svg width='48' height='48' viewBox='0 0 25 24' fill='none' xmlns='http://www.w3.org/2000/svg'>
-              <path
-                d='M11.8484 12.5805L11.8501 12.5818C12.1254 12.804 12.519 12.8038 12.7939 12.5809L12.3214 11.9984C12.7939 12.5809 12.7947 12.5802 12.7947 12.5802L12.7958 12.5793L12.799 12.5766L12.8089 12.5685L12.8422 12.5407C12.8701 12.517 12.9095 12.4833 12.9586 12.4399C13.0567 12.3533 13.1941 12.2278 13.3577 12.0676C13.684 11.7478 14.119 11.2851 14.5551 10.7105C15.4146 9.57842 16.3442 7.92636 16.3442 6.03146C16.3442 3.80494 14.5392 2 12.3127 2C10.0862 2 8.28125 3.80494 8.28125 6.03146C8.28125 7.9276 9.21625 9.5802 10.0801 10.7121C10.5186 11.2866 10.9558 11.7493 11.2838 12.0689C11.4483 12.2292 11.5863 12.3546 11.6849 12.4412C11.7343 12.4846 11.7738 12.5183 11.8019 12.5419L11.8353 12.5698L11.8452 12.5779L11.8484 12.5805ZM11.8501 12.5818C11.8501 12.5818 11.8504 12.5821 12.3214 11.9984L11.8501 12.5818ZM11.0625 6.03125C11.0625 5.34089 11.6221 4.78125 12.3125 4.78125H12.3225C13.0129 4.78125 13.5725 5.34089 13.5725 6.03125C13.5725 6.72161 13.0129 7.28125 12.3225 7.28125H12.3125C11.6221 7.28125 11.0625 6.72161 11.0625 6.03125Z'
-                fill='#ffffff'
-              />
-              <path
-                d='M6.94795 4.67894C6.83907 5.11196 6.78125 5.56526 6.78125 6.03206C6.78125 8.04162 7.61088 9.76378 8.43945 10.9975V20.0885L4.02728 19.008C3.02055 18.7614 2.3125 17.8591 2.3125 16.8226V6.41123C2.3125 4.9519 3.68027 3.87868 5.09771 4.22581L6.94795 4.67894Z'
-                fill='#ffffff'
-              />
-              <path
-                d='M16.193 10.9971C17.0181 9.76301 17.8442 8.04081 17.8442 6.03206C17.8442 5.40655 17.7403 4.80529 17.549 4.24458L20.5972 4.9911C21.604 5.23766 22.312 6.14004 22.312 7.17652V17.5879C22.312 19.0472 20.9443 20.1204 19.5268 19.7733L16.193 18.9568V10.9971Z'
-                fill='#ffffff'
-              />
-              <path
-                d='M10.9074 13.7492L10.9085 13.7501C11.7347 14.4167 12.9144 14.4151 13.7388 13.7464L13.7399 13.7455L13.7436 13.7425L13.7496 13.7376L13.7652 13.7248C13.7771 13.7149 13.7922 13.7023 13.8102 13.6871C13.8462 13.6567 13.8939 13.6157 13.9517 13.5647C14.067 13.4628 14.2235 13.3198 14.4074 13.1396C14.4961 13.0528 14.5918 12.9566 14.693 12.8514V18.9495L9.93945 20.0903V12.8449C10.045 12.9542 10.1448 13.054 10.2369 13.1437C10.4217 13.3239 10.5789 13.4668 10.6948 13.5686C10.7528 13.6196 10.8007 13.6605 10.8369 13.6909C10.8549 13.7061 10.8701 13.7186 10.8821 13.7285L10.8977 13.7413L10.9037 13.7462L10.9074 13.7492Z'
-                fill='#ffffff'
-              />
+            <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
+              <path d="M3 12h5l3-9 4 18 3-9h3"/>
             </svg>
           </div>
-          {/* <h2 className='text-3xl font-bold' style={{ color: "var(--color-text)" }}>
-              PATHYA
-            </h2> */}
-          <p className='mt-2 text-sm' style={{ color: "var(--color-textMuted)" }}>
-            File Tracking System
+          <h1 className="text-xl font-bold tracking-tight" style={{ color: "var(--color-text)" }}>
+            Deskroute
+          </h1>
+          <p className="text-sm mt-1" style={{ color: "var(--color-textMuted)" }}>
+            Sign in to your workspace
           </p>
         </div>
-        <form className='mt-8 space-y-6' onSubmit={handleSubmit}>
+
+        {/* Card */}
+        <div
+          className="rounded-2xl border p-6"
+          style={{
+            backgroundColor: "var(--color-surface)",
+            borderColor: "var(--color-border)",
+            boxShadow: "var(--shadow-lg)",
+          }}>
           {error && (
             <div
-              className='rounded-xl p-3 text-sm font-semibold'
+              className="rounded-lg px-3 py-2.5 text-sm mb-5"
               style={{ backgroundColor: "var(--color-dangerLight)", color: "var(--color-danger)" }}>
               {error}
             </div>
           )}
-          <div className='space-y-4'>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label htmlFor='email' className='block text-sm font-semibold mb-2' style={{ color: "var(--color-text)" }}>
+              <label className="block text-xs font-semibold mb-1.5" style={{ color: "var(--color-text)" }}>
                 Email
               </label>
               <input
-                id='email'
-                name='email'
-                type='email'
-                placeholder='Enter your email'
+                type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className='block w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 transition-all'
-                style={
-                  {
-                    backgroundColor: "var(--color-surface)",
-                    borderColor: "var(--color-border)",
-                    color: "var(--color-text)",
-                    "--tw-ring-color": "var(--color-primary)",
-                  } as any
-                }
+                placeholder="you@company.com"
+                autoComplete="email"
+                className="field field-lg"
               />
             </div>
+
             <div>
-              <label htmlFor='password' className='block text-sm font-semibold mb-2' style={{ color: "var(--color-text)" }}>
+              <label className="block text-xs font-semibold mb-1.5" style={{ color: "var(--color-text)" }}>
                 Password
               </label>
               <input
-                id='password'
-                name='password'
-                type='password'
-                placeholder='Enter your password'
+                type="password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className='block w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 transition-all'
-                style={
-                  {
-                    backgroundColor: "var(--color-surface)",
-                    borderColor: "var(--color-border)",
-                    color: "var(--color-text)",
-                    "--tw-ring-color": "var(--color-primary)",
-                  } as any
-                }
+                placeholder="••••••••"
+                autoComplete="current-password"
+                className="field field-lg"
               />
             </div>
-          </div>
-          <Button type='submit' disabled={loading} loading={loading}>
-            Login
-          </Button>
-        </form>
+
+            <Button type="submit" disabled={loading} loading={loading} fullWidth className="mt-2">
+              Sign in
+            </Button>
+          </form>
+        </div>
+
+        <p className="text-center text-xs mt-6" style={{ color: "var(--color-textSubtle)" }}>
+          Deskroute · Universal File Tracking
+        </p>
       </div>
     </div>
   );

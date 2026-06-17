@@ -5,6 +5,7 @@ import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { PageLoader } from "@/components/Loading";
 import { httpService } from "@/lib/httpService";
+import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -82,12 +83,8 @@ export default function SystemOrganizationsPage() {
   };
 
   const handleLogout = async () => {
-    try {
-      await httpService.post("/api/auth/logout");
-      router.push("/login");
-    } catch (err) {
-      console.error("Logout failed:", err);
-    }
+    await authClient.signOut();
+    window.location.href = "/login";
   };
 
   const formatDate = (date: string) => {

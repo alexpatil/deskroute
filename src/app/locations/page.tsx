@@ -1,252 +1,239 @@
-// app/locations/page.tsx
 "use client";
 
+import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/Button";
-import { Card } from "@/components/Card";
-import { Header } from "@/components/Header";
+import { ConfirmModal } from "@/components/ConfirmModal";
 import { PageLoader } from "@/components/Loading";
+import { useToast } from "@/components/Toast";
+import { DEFAULT_BRANCH_TYPES } from "@/config/constant";
 import { httpService } from "@/lib/httpService";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface Location {
   id: string;
   name: string;
-  type: "OFFICE" | "RTO";
+  type: string;
   createdAt: string;
 }
 
+const fmtDate = (d: string) =>
+  new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+
 export default function LocationsPage() {
   const router = useRouter();
+  const toast = useToast();
+  const nameRef = useRef<HTMLInputElement>(null);
+
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [formData, setFormData] = useState({
-    name: "",
-    type: "OFFICE" as "OFFICE" | "RTO",
-  });
-  const [error, setError] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [formData, setFormData] = useState({ name: "", type: "Branch" });
+  const [formError, setFormError] = useState("");
   const [creating, setCreating] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Location | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
-  useEffect(() => {
-    loadLocations();
-  }, []);
+  useEffect(() => { load(); }, []);
+  useEffect(() => { if (showForm) nameRef.current?.focus(); }, [showForm]);
 
-  const loadLocations = async () => {
+  const load = async () => {
     try {
-      const data = await httpService.get<Location[]>("/api/locations");
-      setLocations(data);
-    } catch (err) {
-      console.error("Failed to load locations:", err);
-      router.push("/dashboard");
-    } finally {
-      setLoading(false);
-    }
+      setLocations(await httpService.get<Location[]>("/api/locations"));
+    } catch { router.push("/dashboard"); }
+    finally { setLoading(false); }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
-    setCreating(true);
-
+    setFormError(""); setCreating(true);
     try {
       await httpService.post("/api/locations", formData);
-      setShowAddForm(false);
-      setFormData({ name: "", type: "OFFICE" });
-      await loadLocations();
+      setShowForm(false);
+      setFormData({ name: "", type: "Branch" });
+      toast("Branch created", "success");
+      await load();
     } catch (err: any) {
-      setError(err instanceof Error ? err.message : "Failed to create location");
-    } finally {
-      setCreating(false);
-    }
+      setFormError(err instanceof Error ? err.message : "Failed to create branch");
+    } finally { setCreating(false); }
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Delete "${name}"?`)) return;
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      await httpService.delete(`/api/locations/${id}`);
-      await loadLocations();
+      await httpService.delete(`/api/locations/${deleteTarget.id}`);
+      toast(`"${deleteTarget.name}" deleted`, "success");
+      setDeleteTarget(null);
+      await load();
     } catch (err: any) {
-      alert(err instanceof Error ? err.message : "Failed to delete location");
-    }
+      toast(err instanceof Error ? err.message : "Failed to delete");
+      setDeleteTarget(null);
+    } finally { setDeleting(false); }
   };
 
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    });
-  };
-
-  if (loading) {
-    return <PageLoader />;
-  }
+  if (loading) return <PageLoader />;
 
   return (
-    <div className='min-h-screen' style={{ backgroundColor: "var(--color-background)" }}>
-      <Header title='Locations' showBack />
+    <AppShell
+      title="Offices & Branches"
+      backHref="/dashboard"
+      actions={
+        <Button size="sm" onClick={() => setShowForm((v) => !v)}>
+          {showForm ? "Cancel" : "+ Add Branch"}
+        </Button>
+      }>
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        title="Delete branch?"
+        message={`"${deleteTarget?.name ?? ""}" will be permanently removed.`}
+        confirmLabel={deleting ? "Deleting…" : "Delete"}
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
 
-      <main className='pb-24'>
-        {showAddForm && (
-          <div className='px-4 py-4'>
-            <Card>
-              <h2 className='font-semibold mb-4' style={{ color: "var(--color-text)" }}>
-                Add Location
-              </h2>
-              {error && (
-                <div
-                  className='mb-4 rounded-xl border p-3 text-sm'
-                  style={{ backgroundColor: "var(--color-dangerLight)", borderColor: "var(--color-danger)", color: "var(--color-danger)" }}>
-                  {error}
-                </div>
-              )}
-              <form onSubmit={handleSubmit} className='space-y-4'>
+      <div className="max-w-5xl mx-auto px-6 py-6 space-y-4">
+        {/* Inline add form */}
+        {showForm && (
+          <div
+            className="rounded-xl border p-5 animate-fade-in"
+            style={{ backgroundColor: "var(--color-surface)", borderColor: "var(--color-border)" }}>
+            <h2 className="text-sm font-semibold mb-4" style={{ color: "var(--color-text)" }}>
+              New Branch
+            </h2>
+
+            {formError && (
+              <div className="rounded-lg px-3 py-2 text-sm mb-4" style={{ backgroundColor: "var(--color-dangerLight)", color: "var(--color-danger)" }}>
+                {formError}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid sm:grid-cols-2 gap-4">
                 <div>
-                  <label className='block text-sm font-semibold mb-2' style={{ color: "var(--color-text)" }}>
-                    Location Name
+                  <label className="block text-xs font-semibold mb-1.5" style={{ color: "var(--color-textMuted)" }}>
+                    Branch Name
                   </label>
                   <input
-                    type='text'
+                    ref={nameRef}
+                    type="text"
                     required
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder='e.g., Main Office, Jalna RTO'
-                    className='w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 transition-all'
-                    style={
-                      {
-                        backgroundColor: "var(--color-surface)",
-                        borderColor: "var(--color-border)",
-                        color: "var(--color-text)",
-                        "--tw-ring-color": "var(--color-primary)",
-                      } as any
-                    }
+                    placeholder="e.g., Main Office, North Branch"
+                    className="field"
                   />
                 </div>
                 <div>
-                  <label className='block text-sm font-semibold mb-2' style={{ color: "var(--color-text)" }}>
+                  <label className="block text-xs font-semibold mb-1.5" style={{ color: "var(--color-textMuted)" }}>
                     Type
                   </label>
-                  <div className='flex gap-2'>
-                    <button
-                      type='button'
-                      onClick={() => setFormData({ ...formData, type: "OFFICE" })}
-                      className={`flex-1 py-3 rounded-xl font-semibold transition-all ${formData.type === "OFFICE" ? "text-white" : ""}`}
-                      style={
-                        formData.type === "OFFICE"
-                          ? { backgroundColor: "var(--color-primary)" }
-                          : {
-                              backgroundColor: "var(--color-surface)",
-                              color: "var(--color-text)",
-                              borderWidth: "1px",
-                              borderColor: "var(--color-border)",
-                            }
-                      }>
-                      Office
-                    </button>
-                    <button
-                      type='button'
-                      onClick={() => setFormData({ ...formData, type: "RTO" })}
-                      className={`flex-1 py-3 rounded-xl font-semibold transition-all ${formData.type === "RTO" ? "text-white" : ""}`}
-                      style={
-                        formData.type === "RTO"
-                          ? { backgroundColor: "var(--color-primary)" }
-                          : {
-                              backgroundColor: "var(--color-surface)",
-                              color: "var(--color-text)",
-                              borderWidth: "1px",
-                              borderColor: "var(--color-border)",
-                            }
-                      }>
-                      RTO
-                    </button>
-                  </div>
+                  <input
+                    type="text"
+                    value={formData.type}
+                    onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                    placeholder="Branch type"
+                    className="field"
+                    list="branch-types"
+                  />
+                  <datalist id="branch-types">
+                    {DEFAULT_BRANCH_TYPES.map((t) => <option key={t} value={t} />)}
+                  </datalist>
                 </div>
-                <div className='flex gap-2'>
-                  <Button type='submit' loading={creating}>
-                    Create
-                  </Button>
-                  <Button
-                    variant='secondary'
-                    onClick={() => {
-                      setShowAddForm(false);
-                      setError("");
-                    }}
-                    disabled={creating}>
-                    Cancel
-                  </Button>
-                </div>
-              </form>
-            </Card>
+              </div>
+
+              {/* Quick type chips */}
+              <div className="flex gap-2 flex-wrap">
+                {DEFAULT_BRANCH_TYPES.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setFormData({ ...formData, type: t })}
+                    className="px-3 py-1 rounded-lg text-xs font-semibold border transition-colors"
+                    style={
+                      formData.type === t
+                        ? { backgroundColor: "var(--color-primary)", color: "#fff", borderColor: "var(--color-primary)" }
+                        : { backgroundColor: "transparent", color: "var(--color-textMuted)", borderColor: "var(--color-border)" }
+                    }>
+                    {t}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <Button type="submit" size="sm" loading={creating}>Create</Button>
+                <Button size="sm" variant="secondary" onClick={() => { setShowForm(false); setFormError(""); }} disabled={creating}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
           </div>
         )}
 
-        <div className='px-4 py-4 space-y-3'>
+        {/* Table */}
+        <div
+          className="rounded-xl border overflow-hidden"
+          style={{ backgroundColor: "var(--color-surface)", borderColor: "var(--color-border)" }}>
+          {/* Header */}
+          <div
+            className="grid grid-cols-[1fr_120px_160px_80px] px-4 py-2.5 border-b text-xs font-semibold uppercase tracking-wide"
+            style={{ borderColor: "var(--color-border)", color: "var(--color-textMuted)", backgroundColor: "var(--color-backgroundAlt)" }}>
+            <span>Name</span>
+            <span>Type</span>
+            <span>Created</span>
+            <span />
+          </div>
+
           {locations.length === 0 ? (
-            <Card>
-              <div className='text-center py-12'>
-                <p className='font-medium mb-1' style={{ color: "var(--color-text)" }}>
-                  No locations yet
-                </p>
-                <p className='text-sm' style={{ color: "var(--color-textMuted)" }}>
-                  Add your first office or RTO
-                </p>
+            <div className="text-center py-16">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center mx-auto mb-3" style={{ backgroundColor: "var(--color-backgroundAlt)" }}>
+                <svg className="w-5 h-5" style={{ color: "var(--color-textSubtle)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+                  <polyline strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} points="9 22 9 12 15 12 15 22"/>
+                </svg>
               </div>
-            </Card>
+              <p className="text-sm font-semibold mb-1" style={{ color: "var(--color-text)" }}>No branches yet</p>
+              <p className="text-xs" style={{ color: "var(--color-textMuted)" }}>Add your first branch to get started</p>
+            </div>
           ) : (
-            locations.map((location) => (
-              <Card key={location.id}>
-                <div className='flex justify-between items-start mb-2'>
-                  <div>
-                    <h3 className='font-semibold' style={{ color: "var(--color-text)" }}>
-                      {location.name}
-                    </h3>
-                    <p className='text-sm mt-1' style={{ color: "var(--color-textMuted)" }}>
-                      Added {formatDate(location.createdAt)}
-                    </p>
+            locations.map((loc, i) => (
+              <div
+                key={loc.id}
+                className="data-row grid grid-cols-[1fr_120px_160px_80px] px-4 py-3 items-center border-b last:border-b-0"
+                style={{ borderColor: "var(--color-borderLight)" }}>
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold"
+                    style={{ backgroundColor: "var(--color-backgroundAlt)", color: "var(--color-textMuted)" }}>
+                    {loc.name[0]?.toUpperCase()}
                   </div>
-                  <span
-                    className='px-2 py-1 text-xs font-semibold rounded-full'
-                    style={{
-                      backgroundColor: location.type === "OFFICE" ? "var(--color-infoLight)" : "var(--color-primaryLight)",
-                      color: location.type === "OFFICE" ? "var(--color-info)" : "var(--color-primary)",
-                    }}>
-                    {location.type}
-                  </span>
+                  <span className="text-sm font-semibold truncate" style={{ color: "var(--color-text)" }}>{loc.name}</span>
                 </div>
-                <button
-                  onClick={() => handleDelete(location.id, location.name)}
-                  className='text-sm font-medium'
-                  style={{ color: "var(--color-danger)" }}>
-                  Delete
-                </button>
-              </Card>
+                <span
+                  className="px-2 py-0.5 rounded-md text-xs font-semibold w-fit"
+                  style={{ backgroundColor: "var(--color-infoLight)", color: "var(--color-info)" }}>
+                  {loc.type}
+                </span>
+                <span className="text-xs" style={{ color: "var(--color-textMuted)" }}>{fmtDate(loc.createdAt)}</span>
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => setDeleteTarget(loc)}
+                    className="btn-icon w-7 h-7"
+                    title="Delete">
+                    <svg className="w-3.5 h-3.5" style={{ color: "var(--color-danger)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} strokeLinecap="round">
+                      <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                      <path d="M10 11v6M14 11v6M9 6V4h6v2"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
             ))
           )}
         </div>
 
-        <div className='px-4 py-4'>
-          <Card style={{ backgroundColor: "var(--color-infoLight)", borderColor: "var(--color-info)" }}>
-            <h3 className='text-sm font-bold mb-2' style={{ color: "var(--color-info)" }}>
-              About Locations
-            </h3>
-            <ul className='text-sm space-y-1' style={{ color: "var(--color-info)" }}>
-              <li>
-                • <strong>OFFICE</strong> - Your branch offices
-              </li>
-              <li>
-                • <strong>RTO</strong> - Transport offices
-              </li>
-              <li>• Staff can be assigned to offices</li>
-            </ul>
-          </Card>
-        </div>
-      </main>
-
-      <div
-        className='fixed bottom-0 left-0 right-0 p-4 border-t'
-        style={{ backgroundColor: "var(--color-surface)", borderColor: "var(--color-border)" }}>
-        <Button onClick={() => setShowAddForm(true)}>+ Add Location</Button>
+        <p className="text-xs px-1" style={{ color: "var(--color-textSubtle)" }}>
+          {locations.length} {locations.length === 1 ? "branch" : "branches"} · Files are tracked as they move between branches
+        </p>
       </div>
-    </div>
+    </AppShell>
   );
 }

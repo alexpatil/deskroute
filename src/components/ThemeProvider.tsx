@@ -1,52 +1,47 @@
-// components/ThemeProvider.tsx
 "use client";
 
-import { ThemeColors, ThemeName, themes } from "@/lib/theme-config";
+import { THEME_STORAGE_KEY, ThemeName } from "@/lib/theme-config";
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
 
 interface ThemeContextType {
   theme: ThemeName;
-  colors: ThemeColors;
   setTheme: (theme: ThemeName) => void;
+  toggleTheme: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+function applyTheme(name: ThemeName) {
+  document.documentElement.classList.toggle("dark", name === "dark");
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
+  // Initial paint is handled by the blocking script in layout.tsx; here we
+  // simply sync React state to whatever class is already on <html>.
   const [theme, setThemeState] = useState<ThemeName>("light");
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
-    const saved = localStorage.getItem("theme") as ThemeName;
-    if (saved && themes[saved]) {
-      setThemeState(saved);
-    }
+    const isDark = document.documentElement.classList.contains("dark");
+    setThemeState(isDark ? "dark" : "light");
   }, []);
 
-  const setTheme = (newTheme: ThemeName) => {
-    setThemeState(newTheme);
-    localStorage.setItem("theme", newTheme);
-    applyTheme(themes[newTheme]);
-  };
-
-  useEffect(() => {
-    if (mounted) {
-      applyTheme(themes[theme]);
+  const setTheme = (next: ThemeName) => {
+    setThemeState(next);
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, next);
+    } catch {
+      /* ignore */
     }
-  }, [theme, mounted]);
-
-  const applyTheme = (colors: ThemeColors) => {
-    Object.entries(colors).forEach(([key, value]) => {
-      document.documentElement.style.setProperty(`--color-${key}`, value);
-    });
+    applyTheme(next);
   };
 
-  if (!mounted) {
-    return null;
-  }
+  const toggleTheme = () => setTheme(theme === "dark" ? "light" : "dark");
 
-  return <ThemeContext.Provider value={{ theme, colors: themes[theme], setTheme }}>{children}</ThemeContext.Provider>;
+  return (
+    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
 }
 
 export function useTheme() {

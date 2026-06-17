@@ -1,13 +1,13 @@
-// app/file-statuses/page.tsx
 "use client";
 
+import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/Button";
-import { Card } from "@/components/Card";
-import { Header } from "@/components/Header";
+import { ConfirmModal } from "@/components/ConfirmModal";
 import { PageLoader } from "@/components/Loading";
+import { useToast } from "@/components/Toast";
 import { httpService } from "@/lib/httpService";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface FileStatus {
   id: string;
@@ -16,220 +16,231 @@ interface FileStatus {
   createdAt: string;
 }
 
+const fmtDate = (d: string) =>
+  new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+
 export default function FileStatusesPage() {
   const router = useRouter();
+  const toast = useToast();
+  const inputRef = useRef<HTMLInputElement>(null);
+
   const [statuses, setStatuses] = useState<FileStatus[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showAddForm, setShowAddForm] = useState(false);
+  const [showForm, setShowForm] = useState(false);
   const [statusName, setStatusName] = useState("");
-  const [error, setError] = useState("");
+  const [formError, setFormError] = useState("");
   const [creating, setCreating] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<FileStatus | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [toggling, setToggling] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadStatuses();
-  }, []);
+  useEffect(() => { load(); }, []);
+  useEffect(() => { if (showForm) inputRef.current?.focus(); }, [showForm]);
 
-  const loadStatuses = async () => {
+  const load = async () => {
     try {
-      const data = await httpService.get<FileStatus[]>("/api/file-statuses");
-      setStatuses(data);
-    } catch (err) {
-      console.error("Failed to load statuses:", err);
-      router.push("/dashboard");
-    } finally {
-      setLoading(false);
-    }
+      setStatuses(await httpService.get<FileStatus[]>("/api/file-statuses"));
+    } catch { router.push("/dashboard"); }
+    finally { setLoading(false); }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!statusName.trim()) return;
-
-    setError("");
-    setCreating(true);
-
+    setFormError(""); setCreating(true);
     try {
       await httpService.post("/api/file-statuses", { name: statusName });
-      setShowAddForm(false);
-      setStatusName("");
-      await loadStatuses();
+      setShowForm(false); setStatusName("");
+      toast("Status created", "success");
+      await load();
     } catch (err: any) {
-      setError(err instanceof Error ? err.message : "Failed to create status");
-    } finally {
-      setCreating(false);
-    }
+      setFormError(err instanceof Error ? err.message : "Failed to create status");
+    } finally { setCreating(false); }
   };
 
-  const handleToggleEnabled = async (id: string, currentEnabled: boolean) => {
+  const handleToggle = async (id: string, current: boolean) => {
+    setToggling(id);
     try {
-      await httpService.put(`/api/file-statuses/${id}`, { isEnabled: !currentEnabled });
-      await loadStatuses();
+      await httpService.put(`/api/file-statuses/${id}`, { isEnabled: !current });
+      await load();
     } catch (err: any) {
-      alert(err instanceof Error ? err.message : "Failed to update status");
-    }
+      toast(err instanceof Error ? err.message : "Failed to update status");
+    } finally { setToggling(null); }
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Delete "${name}"? This cannot be undone.`)) {
-      return;
-    }
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      await httpService.delete(`/api/file-statuses/${id}`);
-      await loadStatuses();
+      await httpService.delete(`/api/file-statuses/${deleteTarget.id}`);
+      toast(`"${deleteTarget.name}" deleted`, "success");
+      setDeleteTarget(null);
+      await load();
     } catch (err: any) {
-      alert(err instanceof Error ? err.message : "Failed to delete status");
-    }
+      toast(err instanceof Error ? err.message : "Failed to delete");
+      setDeleteTarget(null);
+    } finally { setDeleting(false); }
   };
 
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  };
+  if (loading) return <PageLoader />;
 
-  if (loading) {
-    return <PageLoader />;
-  }
+  const enabled = statuses.filter((s) => s.isEnabled).length;
 
   return (
-    <div className='min-h-screen' style={{ backgroundColor: "var(--color-background)" }}>
-      <Header title='File Statuses' showBack />
+    <AppShell
+      title="File Statuses"
+      backHref="/dashboard"
+      actions={
+        <Button size="sm" onClick={() => setShowForm((v) => !v)}>
+          {showForm ? "Cancel" : "+ Add Status"}
+        </Button>
+      }>
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        title="Delete status?"
+        message={`"${deleteTarget?.name ?? ""}" will be permanently removed.`}
+        confirmLabel={deleting ? "Deleting…" : "Delete"}
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
 
-      <main className='max-w-4xl mx-auto px-4 py-4 pb-24'>
-        <div className='mb-4'>
-          <Button onClick={() => setShowAddForm(!showAddForm)}>{showAddForm ? "Cancel" : "+ Add Status"}</Button>
-        </div>
-
-        {showAddForm && (
-          <Card className='mb-4'>
-            <h2 className='text-lg font-bold mb-4' style={{ color: "var(--color-text)" }}>
-              Add New Status
+      <div className="max-w-5xl mx-auto px-6 py-6 space-y-4">
+        {/* Inline add form */}
+        {showForm && (
+          <div
+            className="rounded-xl border p-5 animate-fade-in"
+            style={{ backgroundColor: "var(--color-surface)", borderColor: "var(--color-border)" }}>
+            <h2 className="text-sm font-semibold mb-4" style={{ color: "var(--color-text)" }}>
+              New Status
             </h2>
-            {error && (
-              <div
-                className='mb-4 rounded-xl border-2 p-3 text-sm font-semibold'
-                style={{ backgroundColor: "var(--color-dangerLight)", borderColor: "var(--color-danger)", color: "var(--color-danger)" }}>
-                {error}
+
+            {formError && (
+              <div className="rounded-lg px-3 py-2 text-sm mb-4" style={{ backgroundColor: "var(--color-dangerLight)", color: "var(--color-danger)" }}>
+                {formError}
               </div>
             )}
-            <div className='space-y-4'>
-              <div>
-                <label className='block text-sm font-semibold mb-2' style={{ color: "var(--color-text)" }}>
-                  Status Name
-                </label>
-                <input
-                  type='text'
-                  required
-                  value={statusName}
-                  onChange={(e) => setStatusName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && statusName.trim()) {
-                      e.preventDefault();
-                      handleSubmit(e as any);
-                    }
-                  }}
-                  placeholder='e.g., Pending, In Progress'
-                  className='block w-full px-4 py-3 text-base border rounded-xl focus:outline-none focus:ring-2 transition-all'
-                  style={
-                    {
-                      backgroundColor: "var(--color-surface)",
-                      borderColor: "var(--color-border)",
-                      color: "var(--color-text)",
-                      "--tw-ring-color": "var(--color-primary)",
-                    } as any
-                  }
-                />
-              </div>
 
-              <div className='flex gap-3'>
-                <Button onClick={(e) => handleSubmit(e)} disabled={!statusName.trim()} loading={creating}>
-                  Create Status
-                </Button>
-                <Button
-                  variant='secondary'
-                  onClick={() => {
-                    setShowAddForm(false);
-                    setError("");
-                    setStatusName("");
-                  }}
-                  disabled={creating}>
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          </Card>
-        )}
-
-        {statuses.length === 0 ? (
-          <Card>
-            <div className='text-center py-8'>
-              <p className='font-semibold text-lg mb-1' style={{ color: "var(--color-text)" }}>
-                No statuses found
-              </p>
-              <p className='text-sm' style={{ color: "var(--color-textMuted)" }}>
-                Create your first status to track files
-              </p>
-            </div>
-          </Card>
-        ) : (
-          <div className='space-y-3'>
-            {statuses.map((status) => (
-              <Card key={status.id}>
-                <div className='flex flex-col space-y-3'>
-                  <div className='flex items-start justify-between gap-3'>
-                    <div className='flex-1 min-w-0'>
-                      <h3 className='text-lg font-bold truncate' style={{ color: "var(--color-text)" }}>
-                        {status.name}
-                      </h3>
-                      <p className='text-xs font-medium mt-1' style={{ color: "var(--color-textMuted)" }}>
-                        Created {formatDate(status.createdAt)}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => handleToggleEnabled(status.id, status.isEnabled)}
-                      className='px-3 py-1.5 text-xs font-bold rounded-full whitespace-nowrap transition-all active:scale-95'
-                      style={{
-                        backgroundColor: status.isEnabled ? "var(--color-successLight)" : "var(--color-backgroundAlt)",
-                        color: status.isEnabled ? "var(--color-success)" : "var(--color-textMuted)",
-                      }}>
-                      {status.isEnabled ? "Enabled" : "Disabled"}
-                    </button>
-                  </div>
-
-                  <div className='flex gap-2 pt-2 border-t' style={{ borderColor: "var(--color-borderLight)" }}>
-                    <button
-                      onClick={() => handleToggleEnabled(status.id, status.isEnabled)}
-                      className='flex-1 px-4 py-3 rounded-lg text-sm font-semibold transition-all active:scale-95'
-                      style={{ backgroundColor: "var(--color-primaryLight)", color: "var(--color-text)" }}>
-                      {status.isEnabled ? "Disable" : "Enable"}
-                    </button>
-                    <button
-                      onClick={() => handleDelete(status.id, status.name)}
-                      className='flex-1 px-4 py-3 rounded-lg text-sm font-semibold text-white transition-all active:scale-95'
-                      style={{ backgroundColor: "var(--color-danger)" }}>
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              </Card>
-            ))}
+            <form onSubmit={handleSubmit} className="flex gap-3">
+              <input
+                ref={inputRef}
+                type="text"
+                required
+                value={statusName}
+                onChange={(e) => setStatusName(e.target.value)}
+                placeholder="e.g., Pending, In Progress, Approved"
+                className="field flex-1"
+              />
+              <Button type="submit" size="sm" loading={creating} disabled={!statusName.trim()}>
+                Create
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => { setShowForm(false); setFormError(""); setStatusName(""); }}
+                disabled={creating}>
+                Cancel
+              </Button>
+            </form>
           </div>
         )}
 
-        <Card className='mt-6' style={{ backgroundColor: "var(--color-infoLight)", borderColor: "var(--color-info)" }}>
-          <h3 className='text-base font-bold mb-3' style={{ color: "var(--color-info)" }}>
-            About File Statuses
-          </h3>
-          <ul className='text-sm space-y-2' style={{ color: "var(--color-info)" }}>
-            <li>• Track progress through your workflow</li>
-            <li>• Enabled statuses appear in dropdowns</li>
-            <li>• Disabled statuses are hidden but preserved</li>
-            <li>• Cannot delete statuses in use by files</li>
-          </ul>
-        </Card>
-      </main>
-    </div>
+        {/* Stats */}
+        <div className="flex items-center gap-4 text-sm" style={{ color: "var(--color-textMuted)" }}>
+          <span><span className="font-semibold" style={{ color: "var(--color-text)" }}>{statuses.length}</span> total</span>
+          <span
+            className="w-1 h-1 rounded-full"
+            style={{ backgroundColor: "var(--color-border)" }} />
+          <span><span className="font-semibold" style={{ color: "var(--color-success)" }}>{enabled}</span> enabled</span>
+          <span
+            className="w-1 h-1 rounded-full"
+            style={{ backgroundColor: "var(--color-border)" }} />
+          <span><span className="font-semibold" style={{ color: "var(--color-textMuted)" }}>{statuses.length - enabled}</span> disabled</span>
+        </div>
+
+        {/* Table */}
+        <div
+          className="rounded-xl border overflow-hidden"
+          style={{ backgroundColor: "var(--color-surface)", borderColor: "var(--color-border)" }}>
+          <div
+            className="grid grid-cols-[1fr_100px_160px_100px] px-4 py-2.5 border-b text-xs font-semibold uppercase tracking-wide"
+            style={{ borderColor: "var(--color-border)", color: "var(--color-textMuted)", backgroundColor: "var(--color-backgroundAlt)" }}>
+            <span>Status name</span>
+            <span>State</span>
+            <span>Created</span>
+            <span />
+          </div>
+
+          {statuses.length === 0 ? (
+            <div className="text-center py-16">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center mx-auto mb-3" style={{ backgroundColor: "var(--color-backgroundAlt)" }}>
+                <svg className="w-5 h-5" style={{ color: "var(--color-textSubtle)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/>
+                  <circle cx="7" cy="7" r="1.5" fill="currentColor" stroke="none"/>
+                </svg>
+              </div>
+              <p className="text-sm font-semibold mb-1" style={{ color: "var(--color-text)" }}>No statuses yet</p>
+              <p className="text-xs" style={{ color: "var(--color-textMuted)" }}>Create your first status to start tracking files</p>
+            </div>
+          ) : (
+            statuses.map((s) => (
+              <div
+                key={s.id}
+                className="data-row grid grid-cols-[1fr_100px_160px_100px] px-4 py-3 items-center border-b last:border-b-0"
+                style={{ borderColor: "var(--color-borderLight)" }}>
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ backgroundColor: s.isEnabled ? "var(--color-success)" : "var(--color-textSubtle)" }} />
+                  <span className="text-sm font-medium truncate" style={{ color: "var(--color-text)" }}>{s.name}</span>
+                </div>
+
+                {/* Toggle pill */}
+                <button
+                  onClick={() => handleToggle(s.id, s.isEnabled)}
+                  disabled={toggling === s.id}
+                  className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full transition-colors disabled:opacity-50 w-fit"
+                  style={{
+                    backgroundColor: s.isEnabled ? "var(--color-successLight)" : "var(--color-backgroundAlt)",
+                    color: s.isEnabled ? "var(--color-success)" : "var(--color-textMuted)",
+                  }}>
+                  {toggling === s.id ? (
+                    <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <path strokeLinecap="round" d="M12 2a10 10 0 0110 10"/>
+                    </svg>
+                  ) : (
+                    <span className={`w-1.5 h-1.5 rounded-full ${s.isEnabled ? "bg-current" : "bg-current opacity-40"}`} />
+                  )}
+                  {s.isEnabled ? "Enabled" : "Disabled"}
+                </button>
+
+                <span className="text-xs" style={{ color: "var(--color-textMuted)" }}>{fmtDate(s.createdAt)}</span>
+
+                <div className="flex items-center justify-end gap-1">
+                  <button
+                    onClick={() => handleToggle(s.id, s.isEnabled)}
+                    className="btn-icon w-7 h-7"
+                    title={s.isEnabled ? "Disable" : "Enable"}>
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} strokeLinecap="round">
+                      {s.isEnabled
+                        ? <><path d="M18 6L6 18"/><path d="M6 6l12 12"/></>
+                        : <polyline points="20 6 9 17 4 12"/>}
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => setDeleteTarget(s)}
+                    className="btn-icon w-7 h-7"
+                    title="Delete">
+                    <svg className="w-3.5 h-3.5" style={{ color: "var(--color-danger)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} strokeLinecap="round">
+                      <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                      <path d="M10 11v6M14 11v6M9 6V4h6v2"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </AppShell>
   );
 }

@@ -13,10 +13,14 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { clientName, serviceType, currentLocationId, currentStatusId } = body;
+    const { subjectName, category, currentLocationId, currentStatusId, referenceId, priority, dueDate, description } =
+      body;
 
-    if (!clientName || !serviceType || !currentLocationId || !currentStatusId) {
-      return NextResponse.json({ message: "All fields are required" }, { status: 400 });
+    if (!subjectName || !category || !currentLocationId || !currentStatusId) {
+      return NextResponse.json(
+        { message: "Subject name, category, location, and status are required" },
+        { status: 400 },
+      );
     }
 
     if (user.role === "STAFF") {
@@ -30,11 +34,15 @@ export async function POST(request: NextRequest) {
     }
 
     const file = await fileService.create({
-      clientName,
-      serviceType,
+      subjectName,
+      category,
       currentLocationId,
       currentStatusId,
       organizationId: user.organizationId,
+      referenceId,
+      priority,
+      dueDate: dueDate ? new Date(dueDate) : undefined,
+      description,
     });
 
     return NextResponse.json(file);

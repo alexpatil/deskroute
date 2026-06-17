@@ -14,7 +14,7 @@ export const locationService = {
     return location;
   },
 
-  async listByOrganization(organizationId: string, type?: "OFFICE" | "RTO"): Promise<OfficeLocation[]> {
+  async listByOrganization(organizationId: string, type?: string): Promise<OfficeLocation[]> {
     const where: any = { organizationId };
     if (type) where.type = type;
 

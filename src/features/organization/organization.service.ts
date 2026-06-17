@@ -1,36 +1,73 @@
 // features/organization/organization.service.ts
 import prisma from "@/lib/prisma";
-import * as bcrypt from "bcryptjs";
-import type { CreateOrganizationRequest, Organization, OrganizationWithOwner, UpdateOrganizationRequest } from "./organization.types";
+import bcrypt from "bcryptjs";
+import { randomUUID } from "crypto";
+import type {
+  CreateOrganizationRequest,
+  Organization,
+  OrganizationWithOwner,
+  UpdateOrganizationRequest,
+} from "./organization.types";
+
+function generateSlug(name: string): string {
+  const base = name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  return `${base}-${Date.now().toString(36)}`;
+}
+
+function toOrg(org: any): Organization {
+  return {
+    id: org.id,
+    name: org.name,
+    slug: org.slug ?? null,
+    industry: org.industry ?? null,
+    plan: org.plan ?? "FREE",
+    ownerUserId: org.ownerUserId,
+    isActive: org.isActive ?? true,
+    createdAt: org.createdAt,
+  };
+}
 
 export const organizationService = {
   async create(data: CreateOrganizationRequest): Promise<OrganizationWithOwner> {
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email: data.ownerEmail },
-    });
+    const existingUser = await prisma.user.findUnique({ where: { email: data.ownerEmail } });
+    if (existingUser) throw new Error("User with this email already exists");
 
-    if (existingUser) {
-      throw new Error("User with this email already exists");
-    }
+    const hashedPassword = await bcrypt.hash(data.ownerPassword, 10);
+    const slug = generateSlug(data.name);
 
-    const passwordHash = await bcrypt.hash(data.ownerPassword, 10);
-
-    // Create organization and owner in transaction
     const result = await prisma.$transaction(async (tx) => {
       const organization = await tx.organization.create({
         data: {
           name: data.name,
-          ownerUserId: "temp", // Will be updated immediately
+          slug,
+          industry: data.industry ?? null,
+          ownerUserId: "temp",
         },
       });
 
       const owner = await tx.user.create({
         data: {
+          name: data.ownerEmail,
           email: data.ownerEmail,
-          passwordHash,
+          emailVerified: false,
           role: "ADMIN",
           organizationId: organization.id,
+        },
+      });
+
+      await tx.account.create({
+        data: {
+          id: randomUUID(),
+          accountId: owner.id,
+          providerId: "credential",
+          userId: owner.id,
+          password: hashedPassword,
+          createdAt: new Date(),
+          updatedAt: new Date(),
         },
       });
 
@@ -39,7 +76,6 @@ export const organizationService = {
         data: { ownerUserId: owner.id },
       });
 
-      // Create default file statuses
       await tx.fileStatus.createMany({
         data: [
           { name: "Pending", organizationId: organization.id, isEnabled: true },
@@ -52,11 +88,7 @@ export const organizationService = {
     });
 
     return {
-      id: result.organization.id,
-      name: result.organization.name,
-      ownerUserId: result.owner.id,
-      isActive: true,
-      createdAt: result.organization.createdAt,
+      ...toOrg(result.organization),
       owner: {
         id: result.owner.id,
         email: result.owner.email,
@@ -69,16 +101,12 @@ export const organizationService = {
       where: { id: organizationId },
       data: {
         ...(data.name !== undefined && { name: data.name }),
+        ...(data.isActive !== undefined && { isActive: data.isActive }),
+        ...(data.industry !== undefined && { industry: data.industry }),
       },
     });
 
-    return {
-      id: organization.id,
-      name: organization.name,
-      ownerUserId: organization.ownerUserId,
-      isActive: true,
-      createdAt: organization.createdAt,
-    };
+    return toOrg(organization);
   },
 
   async list(): Promise<OrganizationWithOwner[]> {
@@ -86,8 +114,7 @@ export const organizationService = {
       orderBy: { createdAt: "desc" },
     });
 
-    // Fetch owner details separately for each organization
-    const organizationsWithOwners = await Promise.all(
+    const results = await Promise.all(
       organizations.map(async (org) => {
         const owner = await prisma.user.findUnique({
           where: { id: org.ownerUserId },
@@ -95,17 +122,13 @@ export const organizationService = {
         });
 
         return {
-          id: org.id,
-          name: org.name,
-          ownerUserId: org.ownerUserId,
-          isActive: true,
-          createdAt: org.createdAt,
+          ...toOrg(org),
           owner: owner || { id: "", email: "Unknown" },
         };
-      })
+      }),
     );
 
-    return organizationsWithOwners;
+    return results;
   },
 
   async getById(organizationId: string): Promise<OrganizationWithOwner | null> {
@@ -121,11 +144,7 @@ export const organizationService = {
     });
 
     return {
-      id: organization.id,
-      name: organization.name,
-      ownerUserId: organization.ownerUserId,
-      isActive: true,
-      createdAt: organization.createdAt,
+      ...toOrg(organization),
       owner: owner || { id: "", email: "Unknown" },
     };
   },
@@ -136,22 +155,12 @@ export const organizationService = {
       include: { organization: true },
     });
 
-    if (!user?.organization) {
-      return null;
-    }
+    if (!user?.organization) return null;
 
-    return {
-      id: user.organization.id,
-      name: user.organization.name,
-      ownerUserId: user.organization.ownerUserId,
-      isActive: true,
-      createdAt: user.organization.createdAt,
-    };
+    return toOrg(user.organization);
   },
 
   async delete(organizationId: string): Promise<void> {
-    await prisma.organization.delete({
-      where: { id: organizationId },
-    });
+    await prisma.organization.delete({ where: { id: organizationId } });
   },
 };

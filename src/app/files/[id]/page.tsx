@@ -1,11 +1,12 @@
 // app/files/[id]/page.tsx
 "use client";
 
+import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
-import { Header } from "@/components/Header";
 import { PageLoader } from "@/components/Loading";
 import type { FileWithHistory } from "@/features/files/file.types";
+import { formatFileNumber } from "@/features/files/file.utils";
 import { httpService } from "@/lib/httpService";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -113,25 +114,28 @@ export default function FileDetailPage() {
 
   if (!file) {
     return (
-      <div className='min-h-screen flex items-center justify-center' style={{ backgroundColor: "var(--color-background)" }}>
-        <div style={{ color: "var(--color-text)" }}>{error}</div>
-      </div>
+      <AppShell title="File Detail" backHref="/dashboard">
+        <div className="flex items-center justify-center h-40">
+          <p style={{ color: "var(--color-text)" }}>{error ?? "File not found"}</p>
+        </div>
+      </AppShell>
     );
   }
 
   return (
-    <div className='min-h-screen' style={{ backgroundColor: "var(--color-background)" }}>
-      <Header title='File Detail' showBack />
-
-      <main className='max-w-3xl mx-auto px-4 py-4 pb-32 space-y-4'>
+    <AppShell title="File Detail" backHref="/dashboard">
+      <main className='max-w-3xl mx-auto px-4 py-6 pb-10 space-y-4'>
         <Card>
           <div className='flex justify-between items-start mb-4'>
             <div className='flex-1'>
+              <p className='text-xs font-mono mb-1' style={{ color: "var(--color-textMuted)" }}>
+                {formatFileNumber(file)}
+              </p>
               <h2 className='text-xl font-bold mb-1' style={{ color: "var(--color-text)" }}>
-                {file.clientName}
+                {file.subjectName}
               </h2>
               <p className='text-sm font-medium' style={{ color: "var(--color-textMuted)" }}>
-                {file.serviceType}
+                {file.category}
               </p>
             </div>
             <span
@@ -154,15 +158,7 @@ export default function FileDetailPage() {
                   value={editLocationId}
                   onChange={(e) => setEditLocationId(e.target.value)}
                   disabled={file.isCompleted && !user?.isOwner}
-                  className='block w-full px-4 py-3 text-base border rounded-xl focus:outline-none focus:ring-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed'
-                  style={
-                    {
-                      backgroundColor: "var(--color-surface)",
-                      borderColor: "var(--color-border)",
-                      color: "var(--color-text)",
-                      "--tw-ring-color": "var(--color-primary)",
-                    } as any
-                  }>
+                  className='field field-lg field-select disabled:opacity-50 disabled:cursor-not-allowed'>
                   {locations.map((location) => (
                     <option key={location.id} value={location.id}>
                       {location.name} ({location.type})
@@ -178,15 +174,7 @@ export default function FileDetailPage() {
                   value={editStatusId}
                   onChange={(e) => setEditStatusId(e.target.value)}
                   disabled={file.isCompleted && !user?.isOwner}
-                  className='block w-full px-4 py-3 text-base border rounded-xl focus:outline-none focus:ring-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed'
-                  style={
-                    {
-                      backgroundColor: "var(--color-surface)",
-                      borderColor: "var(--color-border)",
-                      color: "var(--color-text)",
-                      "--tw-ring-color": "var(--color-primary)",
-                    } as any
-                  }>
+                  className='field field-lg field-select disabled:opacity-50 disabled:cursor-not-allowed'>
                   {statuses.map((status) => (
                     <option key={status.id} value={status.id}>
                       {status.name}
@@ -201,7 +189,7 @@ export default function FileDetailPage() {
                   This file is completed. Only the organization owner can modify it.
                 </div>
               )}
-              <div className='flex flex-col gap-3 pt-2'>
+              <div className='flex gap-2 pt-2'>
                 <Button onClick={handleUpdate} loading={updating} disabled={updating || (file.isCompleted && !user?.isOwner)}>
                   Save Changes
                 </Button>
@@ -224,7 +212,12 @@ export default function FileDetailPage() {
                   Current Location
                 </p>
                 <p className='text-base font-semibold' style={{ color: "var(--color-text)" }}>
-                  {file.currentLocation.name} ({file.currentLocation.type})
+                  {file.currentLocation.name}
+                  {file.currentLocation.type !== "Branch" && (
+                    <span className='ml-2 text-sm font-normal' style={{ color: "var(--color-textMuted)" }}>
+                      ({file.currentLocation.type})
+                    </span>
+                  )}
                 </p>
               </div>
               <div className='rounded-xl p-3 border' style={{ backgroundColor: "var(--color-backgroundAlt)", borderColor: "var(--color-border)" }}>
@@ -240,24 +233,16 @@ export default function FileDetailPage() {
         </Card>
 
         {!isEditing && !file.isCompleted && (
-          <div
-            className='fixed bottom-0  left-0 right-0 p-4 border-t'
-            style={{ backgroundColor: "var(--color-surface)", borderColor: "var(--color-border)" }}>
-            <div className='max-w-3xl mx-auto flex flex-col gap-3'>
-              <Button onClick={() => setIsEditing(true)}>Update Location & Status</Button>
-            </div>
+          <div className='flex justify-end'>
+            <Button onClick={() => setIsEditing(true)}>Update Location & Status</Button>
           </div>
         )}
 
         {!isEditing && file.isCompleted && user?.isOwner && (
-          <div
-            className='fixed bottom-0 left-0 right-0 p-4 border-t'
-            style={{ backgroundColor: "var(--color-surface)", borderColor: "var(--color-border)" }}>
-            <div className='max-w-3xl mx-auto'>
-              <Button onClick={() => setIsEditing(true)} variant='secondary'>
-                Update Completed File (Owner Only)
-              </Button>
-            </div>
+          <div className='flex justify-end'>
+            <Button onClick={() => setIsEditing(true)} variant='secondary'>
+              Update Completed File (Owner Only)
+            </Button>
           </div>
         )}
 
@@ -313,6 +298,6 @@ export default function FileDetailPage() {
           </div>
         </Card>
       </main>
-    </div>
+    </AppShell>
   );
 }

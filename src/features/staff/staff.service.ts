@@ -1,26 +1,43 @@
 import prisma from "@/lib/prisma";
-import * as bcrypt from "bcryptjs";
+import bcrypt from "bcryptjs";
+import { randomUUID } from "crypto";
 import type { CreateStaffRequest, StaffUser, UpdateStaffRequest } from "./staff.types";
 
 export const staffService = {
   async create(data: CreateStaffRequest): Promise<StaffUser> {
-    const passwordHash = await bcrypt.hash(data.password, 10);
+    const existing = await prisma.user.findUnique({ where: { email: data.email } });
+    if (existing) throw new Error("Email already in use");
 
+    const hashedPassword = await bcrypt.hash(data.password, 10);
+
+    // Create user record
     const user = await prisma.user.create({
       data: {
+        name: data.email,
         email: data.email,
-        passwordHash,
+        emailVerified: false,
         role: data.role,
         organizationId: data.organizationId,
-        assignedLocationId: data.assignedLocationId,
+        assignedLocationId: data.assignedLocationId ?? null,
         canViewAllFiles: data.canViewAllFiles ?? false,
         canManageOffices: data.canManageOffices ?? false,
         canManageStaff: data.canManageStaff ?? false,
         canConfigureStatuses: data.canConfigureStatuses ?? false,
         canManageLocations: data.canManageLocations ?? false,
       },
-      include: {
-        assignedLocation: true,
+      include: { assignedLocation: true },
+    });
+
+    // Create Better Auth credential account (password stored here, not on User)
+    await prisma.account.create({
+      data: {
+        id: randomUUID(),
+        accountId: user.id,
+        providerId: "credential",
+        userId: user.id,
+        password: hashedPassword,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       },
     });
 
@@ -50,9 +67,7 @@ export const staffService = {
         ...(data.canConfigureStatuses !== undefined && { canConfigureStatuses: data.canConfigureStatuses }),
         ...(data.canManageLocations !== undefined && { canManageLocations: data.canManageLocations }),
       },
-      include: {
-        assignedLocation: true,
-      },
+      include: { assignedLocation: true },
     });
 
     return {
@@ -72,13 +87,8 @@ export const staffService = {
 
   async listByOrganization(organizationId: string): Promise<StaffUser[]> {
     const users = await prisma.user.findMany({
-      where: {
-        organizationId,
-      },
-      include: {
-        assignedLocation: true,
-        organization: true,
-      },
+      where: { organizationId },
+      include: { assignedLocation: true, organization: true },
       orderBy: { createdAt: "desc" },
     });
 
@@ -100,8 +110,6 @@ export const staffService = {
   },
 
   async delete(userId: string): Promise<void> {
-    await prisma.user.delete({
-      where: { id: userId },
-    });
+    await prisma.user.delete({ where: { id: userId } });
   },
 };

@@ -9,19 +9,39 @@ interface SelectProps {
   onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
   options: SelectOption[];
   required?: boolean;
+  id?: string;
+  disabled?: boolean;
 }
 
-export function Select({ label, value, onChange, options, required = false }: SelectProps) {
+export function Select({ label, value, onChange, options, required = false, id, disabled = false }: SelectProps) {
   return (
     <div>
-      <label className='block text-sm font-medium text-gray-700 mb-2'>{label}</label>
+      <label
+        htmlFor={id}
+        className="block text-sm font-semibold mb-2"
+        style={{ color: "var(--color-text)" }}>
+        {label}
+      </label>
       <select
+        id={id}
         value={value}
         onChange={onChange}
         required={required}
-        className='w-full px-4 py-3 bg-white border border-amber-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400'>
+        disabled={disabled}
+        className="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        style={
+          {
+            backgroundColor: "var(--color-surface)",
+            borderColor: "var(--color-border)",
+            color: "var(--color-text)",
+            "--tw-ring-color": "var(--color-primary)",
+          } as React.CSSProperties & { "--tw-ring-color": string }
+        }>
         {options.map((option) => (
-          <option key={option.value} value={option.value}>
+          <option
+            key={option.value}
+            value={option.value}
+            style={{ backgroundColor: "var(--color-surface)", color: "var(--color-text)" }}>
             {option.label}
           </option>
         ))}

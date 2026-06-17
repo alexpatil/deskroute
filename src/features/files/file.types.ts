@@ -1,9 +1,15 @@
+export type Priority = "LOW" | "NORMAL" | "HIGH" | "URGENT";
+
 export interface CreateFileRequest {
-  clientName: string;
-  serviceType: string;
+  subjectName: string;
+  category: string;
   currentLocationId: string;
   currentStatusId: string;
   organizationId: string;
+  referenceId?: string;
+  priority?: Priority;
+  dueDate?: Date | null;
+  description?: string;
 }
 
 export interface UpdateFileRequest {
@@ -14,8 +20,14 @@ export interface UpdateFileRequest {
 
 export interface File {
   id: string;
-  clientName: string;
-  serviceType: string;
+  trackingNumber: string;
+  fileNumber: number | null;
+  referenceId: string | null;
+  subjectName: string;
+  category: string;
+  priority: Priority;
+  dueDate: Date | null;
+  description: string | null;
   currentLocationId: string;
   currentStatusId: string;
   isCompleted: boolean;

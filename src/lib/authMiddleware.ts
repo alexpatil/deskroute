@@ -1,19 +1,18 @@
-// lib/authMiddleware.ts
-import { getSession } from "@/lib/auth";
+import { auth } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "./prisma";
 
-const SYSTEM_ADMIN_EMAILS = process.env.SYSTEM_ADMIN_EMAILS?.split(",") || [];
+const SYSTEM_ADMIN_EMAILS = process.env.SYSTEM_ADMIN_EMAILS?.split(",").map((e) => e.trim()) ?? [];
 
 export async function requireAuth(request: NextRequest) {
-  const userId = await getSession();
+  const session = await auth.api.getSession({ headers: request.headers });
 
-  if (!userId) {
+  if (!session) {
     return { error: NextResponse.json({ message: "Not authenticated" }, { status: 401 }), user: null };
   }
 
   const user = await prisma.user.findUnique({
-    where: { id: userId },
+    where: { id: session.user.id },
     include: { organization: true, assignedLocation: true },
   });
 
@@ -67,32 +66,21 @@ export function isOwner(user: any): boolean {
 
 export function isSystemAdmin(user: any): boolean {
   if (user?.role !== "SYSTEM_ADMIN") return false;
-  if (SYSTEM_ADMIN_EMAILS.length > 0) {
-    return SYSTEM_ADMIN_EMAILS.includes(user.email);
-  }
+  if (SYSTEM_ADMIN_EMAILS.length > 0) return SYSTEM_ADMIN_EMAILS.includes(user.email);
   return true;
 }
 
-export function hasPermission(user: any, permission: keyof PermissionMap): boolean {
-  // System admin has NO org-level permissions
-  if (user.role === "SYSTEM_ADMIN") return false;
+type PermissionKey = "viewAllFiles" | "manageStaff" | "configureStatuses" | "manageLocations";
 
-  const permissionMap: PermissionMap = {
-    viewAllFiles: "canViewAllFiles",
-    manageOffices: "canManageOffices",
-    manageStaff: "canManageStaff",
-    configureStatuses: "canConfigureStatuses",
-    manageLocations: "canManageLocations",
-  };
-
-  const key = permissionMap[permission];
-  return key ? user[key] === true : false;
-}
-
-type PermissionMap = {
-  viewAllFiles: "canViewAllFiles";
-  manageOffices: "canManageOffices";
-  manageStaff: "canManageStaff";
-  configureStatuses: "canConfigureStatuses";
-  manageLocations: "canManageLocations";
+const PERMISSION_MAP: Record<PermissionKey, string> = {
+  viewAllFiles: "canViewAllFiles",
+  manageStaff: "canManageStaff",
+  configureStatuses: "canConfigureStatuses",
+  manageLocations: "canManageLocations",
 };
+
+export function hasPermission(user: any, permission: PermissionKey): boolean {
+  if (user?.role === "SYSTEM_ADMIN") return false;
+  const field = PERMISSION_MAP[permission];
+  return field ? user[field] === true : false;
+}

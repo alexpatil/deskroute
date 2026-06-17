@@ -1,13 +1,13 @@
-// app/staff/page.tsx
 "use client";
 
+import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/Button";
-import { Card } from "@/components/Card";
-import { Header } from "@/components/Header";
+import { ConfirmModal } from "@/components/ConfirmModal";
 import { PageLoader } from "@/components/Loading";
+import { useToast } from "@/components/Toast";
 import { httpService } from "@/lib/httpService";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface StaffUser {
   id: string;
@@ -28,370 +28,290 @@ interface Location {
   type: string;
 }
 
+const DEFAULT_FORM = {
+  email: "",
+  password: "",
+  role: "STAFF",
+  assignedLocationId: "",
+  canViewAllFiles: false,
+  canManageLocations: false,
+  canConfigureStatuses: false,
+  canManageStaff: false,
+};
+
+const PERMS = [
+  { key: "canViewAllFiles" as const, label: "View All Files", desc: "Access files from all locations" },
+  { key: "canManageLocations" as const, label: "Manage Branches", desc: "Create, edit, and delete branches" },
+  { key: "canConfigureStatuses" as const, label: "Configure Statuses", desc: "Manage file status options" },
+  { key: "canManageStaff" as const, label: "Manage Staff", desc: "Add and remove staff members" },
+];
+
+const PERM_COLORS: Record<string, { bg: string; color: string }> = {
+  canViewAllFiles:      { bg: "var(--color-infoLight)",    color: "var(--color-info)" },
+  canManageLocations:   { bg: "var(--color-primaryLight)", color: "var(--color-primary)" },
+  canConfigureStatuses: { bg: "var(--color-successLight)", color: "var(--color-success)" },
+  canManageStaff:       { bg: "var(--color-warningLight)", color: "var(--color-warning)" },
+};
+
 export default function StaffManagementPage() {
   const router = useRouter();
+  const toast = useToast();
+  const emailRef = useRef<HTMLInputElement>(null);
+
   const [staff, setStaff] = useState<StaffUser[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showAddForm, setShowAddForm] = useState(false);
+  const [showForm, setShowForm] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-    role: "STAFF",
-    assignedLocationId: "",
-    canViewAllFiles: false,
-    canManageLocations: false,
-    canConfigureStatuses: false,
-    canManageStaff: false,
-  });
+  const [formData, setFormData] = useState(DEFAULT_FORM);
+  const [formError, setFormError] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<StaffUser | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useEffect(() => { load(); }, []);
+  useEffect(() => { if (showForm) emailRef.current?.focus(); }, [showForm]);
 
-  const loadData = async () => {
+  const load = async () => {
     try {
-      const [staffData, locationsData] = await Promise.all([
+      const [staffData, locData] = await Promise.all([
         httpService.get<StaffUser[]>("/api/staff"),
-        httpService.get<Location[]>("/api/locations?type=OFFICE"),
+        httpService.get<Location[]>("/api/locations"),
       ]);
       setStaff(staffData);
-      setLocations(locationsData);
-    } catch (err) {
-      console.error("Failed to load data:", err);
-      router.push("/dashboard");
-    } finally {
-      setLoading(false);
-    }
+      setLocations(locData);
+    } catch { router.push("/dashboard"); }
+    finally { setLoading(false); }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setCreating(true);
-
+    setFormError(""); setCreating(true);
     try {
       await httpService.post("/api/staff", formData);
-      setShowAddForm(false);
-      setFormData({
-        email: "",
-        password: "",
-        role: "STAFF",
-        assignedLocationId: "",
-        canViewAllFiles: false,
-        canManageLocations: false,
-        canConfigureStatuses: false,
-        canManageStaff: false,
-      });
-      await loadData();
-    } catch (err) {
-      console.error("Failed to create staff:", err);
-      alert("Failed to create staff member");
-    } finally {
-      setCreating(false);
-    }
+      setShowForm(false); setFormData(DEFAULT_FORM);
+      toast("Staff member created", "success");
+      await load();
+    } catch (err: any) {
+      setFormError(err instanceof Error ? err.message : "Failed to create staff member");
+    } finally { setCreating(false); }
   };
 
-  const handleDelete = async (id: string, email: string) => {
-    if (!confirm(`Delete staff member "${email}"?`)) return;
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      await httpService.delete(`/api/staff/${id}`);
-      await loadData();
-    } catch (err) {
-      console.error("Failed to delete staff:", err);
-      alert("Failed to delete staff member");
-    }
+      await httpService.delete(`/api/staff/${deleteTarget.id}`);
+      toast(`${deleteTarget.email} removed`, "success");
+      setDeleteTarget(null);
+      await load();
+    } catch (err: any) {
+      toast(err instanceof Error ? err.message : "Failed to remove");
+      setDeleteTarget(null);
+    } finally { setDeleting(false); }
   };
 
-  if (loading) {
-    return <PageLoader />;
-  }
+  const initials = (email: string) => email[0]?.toUpperCase() ?? "?";
+
+  if (loading) return <PageLoader />;
 
   return (
-    <div className='min-h-screen' style={{ backgroundColor: "var(--color-background)" }}>
-      <Header title='Staff Management' showBack />
+    <AppShell
+      title="Employees"
+      backHref="/dashboard"
+      actions={
+        <Button size="sm" onClick={() => setShowForm((v) => !v)}>
+          {showForm ? "Cancel" : "+ Add Staff"}
+        </Button>
+      }>
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        title="Remove staff member?"
+        message={`${deleteTarget?.email ?? ""} will be permanently removed from your organization.`}
+        confirmLabel={deleting ? "Removing…" : "Remove"}
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
 
-      <main className='max-w-4xl mx-auto px-4 py-4 pb-24'>
-        {showAddForm && (
-          <Card className='mb-4'>
-            <h2 className='text-lg font-bold mb-4' style={{ color: "var(--color-text)" }}>
-              Add Staff Member
+      <div className="max-w-5xl mx-auto px-6 py-6 space-y-4">
+        {/* Inline add form */}
+        {showForm && (
+          <div
+            className="rounded-xl border p-5 animate-fade-in"
+            style={{ backgroundColor: "var(--color-surface)", borderColor: "var(--color-border)" }}>
+            <h2 className="text-sm font-semibold mb-4" style={{ color: "var(--color-text)" }}>
+              New Staff Member
             </h2>
-            <form onSubmit={handleSubmit} className='space-y-4'>
-              <div>
-                <label className='block text-sm font-semibold mb-2' style={{ color: "var(--color-text)" }}>
-                  Email
-                </label>
-                <input
-                  type='email'
-                  required
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  placeholder='staff@example.com'
-                  className='w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 transition-all'
-                  style={
-                    {
-                      backgroundColor: "var(--color-surface)",
-                      borderColor: "var(--color-border)",
-                      color: "var(--color-text)",
-                      "--tw-ring-color": "var(--color-primary)",
-                    } as any
-                  }
-                />
+
+            {formError && (
+              <div className="rounded-lg px-3 py-2 text-sm mb-4" style={{ backgroundColor: "var(--color-dangerLight)", color: "var(--color-danger)" }}>
+                {formError}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold mb-1.5" style={{ color: "var(--color-textMuted)" }}>Email</label>
+                  <input
+                    ref={emailRef}
+                    type="email"
+                    required
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    placeholder="staff@example.com"
+                    className="field"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold mb-1.5" style={{ color: "var(--color-textMuted)" }}>Password</label>
+                  <input
+                    type="password"
+                    required
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    placeholder="Strong password"
+                    className="field"
+                  />
+                </div>
               </div>
 
               <div>
-                <label className='block text-sm font-semibold mb-2' style={{ color: "var(--color-text)" }}>
-                  Password
-                </label>
-                <input
-                  type='password'
-                  required
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  placeholder='Strong password'
-                  className='w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 transition-all'
-                  style={
-                    {
-                      backgroundColor: "var(--color-surface)",
-                      borderColor: "var(--color-border)",
-                      color: "var(--color-text)",
-                      "--tw-ring-color": "var(--color-primary)",
-                    } as any
-                  }
-                />
-              </div>
-
-              <div>
-                <label className='block text-sm font-semibold mb-2' style={{ color: "var(--color-text)" }}>
-                  Assigned Office
-                </label>
+                <label className="block text-xs font-semibold mb-1.5" style={{ color: "var(--color-textMuted)" }}>Assigned Office</label>
                 <select
                   value={formData.assignedLocationId}
                   onChange={(e) => setFormData({ ...formData, assignedLocationId: e.target.value })}
-                  className='w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 transition-all'
-                  style={
-                    {
-                      backgroundColor: "var(--color-surface)",
-                      borderColor: "var(--color-border)",
-                      color: "var(--color-text)",
-                      "--tw-ring-color": "var(--color-primary)",
-                    } as any
-                  }>
-                  <option value=''>None (Access all)</option>
+                  className="field field-select">
+                  <option value="">None — access all branches</option>
                   {locations.map((loc) => (
-                    <option key={loc.id} value={loc.id}>
-                      {loc.name}
-                    </option>
+                    <option key={loc.id} value={loc.id}>{loc.name}</option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label className='block text-sm font-semibold mb-2' style={{ color: "var(--color-text)" }}>
-                  Permissions
-                </label>
-                <div className='space-y-2'>
-                  <label
-                    className='flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors'
-                    style={{ backgroundColor: "var(--color-surface)", borderColor: "var(--color-border)" }}>
-                    <input
-                      type='checkbox'
-                      checked={formData.canViewAllFiles}
-                      onChange={(e) => setFormData({ ...formData, canViewAllFiles: e.target.checked })}
-                      className='w-4 h-4 rounded'
-                      style={{ accentColor: "var(--color-primary)" }}
-                    />
-                    <div className='flex-1'>
-                      <span className='text-sm font-semibold block' style={{ color: "var(--color-text)" }}>
-                        View All Files
-                      </span>
-                      <span className='text-xs' style={{ color: "var(--color-textMuted)" }}>
-                        Access files from all locations
-                      </span>
-                    </div>
-                  </label>
-
-                  <label
-                    className='flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors'
-                    style={{ backgroundColor: "var(--color-surface)", borderColor: "var(--color-border)" }}>
-                    <input
-                      type='checkbox'
-                      checked={formData.canManageLocations}
-                      onChange={(e) => setFormData({ ...formData, canManageLocations: e.target.checked })}
-                      className='w-4 h-4 rounded'
-                      style={{ accentColor: "var(--color-primary)" }}
-                    />
-                    <div className='flex-1'>
-                      <span className='text-sm font-semibold block' style={{ color: "var(--color-text)" }}>
-                        Manage Locations
-                      </span>
-                      <span className='text-xs' style={{ color: "var(--color-textMuted)" }}>
-                        Create, edit, and delete locations
-                      </span>
-                    </div>
-                  </label>
-
-                  <label
-                    className='flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors'
-                    style={{ backgroundColor: "var(--color-surface)", borderColor: "var(--color-border)" }}>
-                    <input
-                      type='checkbox'
-                      checked={formData.canConfigureStatuses}
-                      onChange={(e) => setFormData({ ...formData, canConfigureStatuses: e.target.checked })}
-                      className='w-4 h-4 rounded'
-                      style={{ accentColor: "var(--color-primary)" }}
-                    />
-                    <div className='flex-1'>
-                      <span className='text-sm font-semibold block' style={{ color: "var(--color-text)" }}>
-                        Configure Statuses
-                      </span>
-                      <span className='text-xs' style={{ color: "var(--color-textMuted)" }}>
-                        Manage file status options
-                      </span>
-                    </div>
-                  </label>
-
-                  <label
-                    className='flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors'
-                    style={{ backgroundColor: "var(--color-surface)", borderColor: "var(--color-border)" }}>
-                    <input
-                      type='checkbox'
-                      checked={formData.canManageStaff}
-                      onChange={(e) => setFormData({ ...formData, canManageStaff: e.target.checked })}
-                      className='w-4 h-4 rounded'
-                      style={{ accentColor: "var(--color-primary)" }}
-                    />
-                    <div className='flex-1'>
-                      <span className='text-sm font-semibold block' style={{ color: "var(--color-text)" }}>
-                        Manage Staff
-                      </span>
-                      <span className='text-xs' style={{ color: "var(--color-textMuted)" }}>
-                        Add and remove staff members
-                      </span>
-                    </div>
-                  </label>
+                <label className="block text-xs font-semibold mb-2" style={{ color: "var(--color-textMuted)" }}>Permissions</label>
+                <div className="grid sm:grid-cols-2 gap-2">
+                  {PERMS.map(({ key, label, desc }) => (
+                    <label
+                      key={key}
+                      className="flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors"
+                      style={{
+                        backgroundColor: formData[key] ? "var(--color-primaryLight)" : "var(--color-backgroundAlt)",
+                        borderColor: formData[key] ? "var(--color-primary)" : "var(--color-border)",
+                      }}>
+                      <input
+                        type="checkbox"
+                        checked={formData[key]}
+                        onChange={(e) => setFormData({ ...formData, [key]: e.target.checked })}
+                        className="mt-0.5 w-3.5 h-3.5 shrink-0"
+                        style={{ accentColor: "var(--color-primary)" }}
+                      />
+                      <div>
+                        <span className="text-xs font-semibold block" style={{ color: "var(--color-text)" }}>{label}</span>
+                        <span className="text-[11px]" style={{ color: "var(--color-textMuted)" }}>{desc}</span>
+                      </div>
+                    </label>
+                  ))}
                 </div>
               </div>
 
-              <div className='flex gap-3 pt-2'>
-                <Button type='submit' loading={creating}>
-                  Create Staff Member
-                </Button>
-                <Button variant='secondary' onClick={() => setShowAddForm(false)} disabled={creating}>
+              <div className="flex gap-2 pt-1">
+                <Button type="submit" size="sm" loading={creating}>Create Staff Member</Button>
+                <Button size="sm" variant="secondary" onClick={() => { setShowForm(false); setFormError(""); }} disabled={creating}>
                   Cancel
                 </Button>
               </div>
             </form>
-          </Card>
-        )}
-
-        {staff.length === 0 ? (
-          <Card>
-            <div className='text-center py-12'>
-              <p className='font-semibold text-lg mb-1' style={{ color: "var(--color-text)" }}>
-                No staff members yet
-              </p>
-              <p className='text-sm' style={{ color: "var(--color-textMuted)" }}>
-                Add your first staff member to get started
-              </p>
-            </div>
-          </Card>
-        ) : (
-          <div className='space-y-3'>
-            {staff.map((s) => (
-              <Card key={s.id}>
-                <div className='space-y-3'>
-                  <div className='flex items-start justify-between gap-3'>
-                    <div className='flex-1 min-w-0'>
-                      <h3 className='text-base font-bold truncate' style={{ color: "var(--color-text)" }}>
-                        {s.email}
-                      </h3>
-                      <div className='flex items-center gap-2 mt-1'>
-                        <svg
-                          className='w-4 h-4 shrink-0'
-                          style={{ color: "var(--color-textMuted)" }}
-                          fill='none'
-                          stroke='currentColor'
-                          viewBox='0 0 24 24'>
-                          <path
-                            strokeLinecap='round'
-                            strokeLinejoin='round'
-                            strokeWidth={2}
-                            d='M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z'
-                          />
-                          <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M15 11a3 3 0 11-6 0 3 3 0 016 0z' />
-                        </svg>
-                        <p className='text-sm truncate' style={{ color: "var(--color-textMuted)" }}>
-                          {s.assignedLocation?.name || "All locations"}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {(s.canViewAllFiles || s.canManageLocations || s.canConfigureStatuses || s.canManageStaff) && (
-                    <div className='flex flex-wrap gap-2'>
-                      {s.canViewAllFiles && (
-                        <span
-                          className='px-2.5 py-1 text-xs font-semibold rounded-full'
-                          style={{ backgroundColor: "var(--color-infoLight)", color: "var(--color-info)" }}>
-                          View All Files
-                        </span>
-                      )}
-                      {s.canManageLocations && (
-                        <span
-                          className='px-2.5 py-1 text-xs font-semibold rounded-full'
-                          style={{ backgroundColor: "var(--color-primaryLight)", color: "var(--color-primary)" }}>
-                          Manage Locations
-                        </span>
-                      )}
-                      {s.canConfigureStatuses && (
-                        <span
-                          className='px-2.5 py-1 text-xs font-semibold rounded-full'
-                          style={{ backgroundColor: "var(--color-successLight)", color: "var(--color-success)" }}>
-                          Configure Statuses
-                        </span>
-                      )}
-                      {s.canManageStaff && (
-                        <span
-                          className='px-2.5 py-1 text-xs font-semibold rounded-full'
-                          style={{ backgroundColor: "var(--color-warningLight)", color: "var(--color-warning)" }}>
-                          Manage Staff
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  <div className='pt-2 border-t' style={{ borderColor: "var(--color-borderLight)" }}>
-                    <button
-                      onClick={() => handleDelete(s.id, s.email)}
-                      className='text-sm font-semibold transition-colors'
-                      style={{ color: "var(--color-danger)" }}>
-                      Delete Staff Member
-                    </button>
-                  </div>
-                </div>
-              </Card>
-            ))}
           </div>
         )}
 
-        <div className='mt-4'>
-          <Button onClick={() => setShowAddForm(!showAddForm)}>{showAddForm ? "Cancel" : "+ Add Staff Member"}</Button>
+        {/* Table */}
+        <div
+          className="rounded-xl border overflow-hidden"
+          style={{ backgroundColor: "var(--color-surface)", borderColor: "var(--color-border)" }}>
+          <div
+            className="grid grid-cols-[2fr_1fr_2fr_60px] px-4 py-2.5 border-b text-xs font-semibold uppercase tracking-wide"
+            style={{ borderColor: "var(--color-border)", color: "var(--color-textMuted)", backgroundColor: "var(--color-backgroundAlt)" }}>
+            <span>Employee</span>
+            <span>Office</span>
+            <span>Permissions</span>
+            <span />
+          </div>
+
+          {staff.length === 0 ? (
+            <div className="text-center py-16">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center mx-auto mb-3" style={{ backgroundColor: "var(--color-backgroundAlt)" }}>
+                <svg className="w-5 h-5" style={{ color: "var(--color-textSubtle)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+                  <circle cx="9" cy="7" r="4" strokeWidth={1.8}/>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+                </svg>
+              </div>
+              <p className="text-sm font-semibold mb-1" style={{ color: "var(--color-text)" }}>No staff members yet</p>
+              <p className="text-xs" style={{ color: "var(--color-textMuted)" }}>Add your first staff member to get started</p>
+            </div>
+          ) : (
+            staff.map((s) => {
+              const perms = PERMS.filter(({ key }) => s[key]);
+              return (
+                <div
+                  key={s.id}
+                  className="data-row grid grid-cols-[2fr_1fr_2fr_60px] px-4 py-3 items-center border-b last:border-b-0"
+                  style={{ borderColor: "var(--color-borderLight)" }}>
+                  {/* Email + avatar */}
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                      style={{ backgroundColor: "var(--color-primary)", color: "#fff" }}>
+                      {initials(s.email)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate" style={{ color: "var(--color-text)" }}>{s.email}</p>
+                      <p className="text-[11px]" style={{ color: "var(--color-textMuted)" }}>Staff</p>
+                    </div>
+                  </div>
+
+                  {/* Office */}
+                  <span className="text-xs truncate" style={{ color: "var(--color-textMuted)" }}>
+                    {s.assignedLocation?.name ?? "All branches"}
+                  </span>
+
+                  {/* Permissions */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {perms.length === 0 ? (
+                      <span className="text-xs" style={{ color: "var(--color-textSubtle)" }}>No extra permissions</span>
+                    ) : perms.map(({ key, label }) => (
+                      <span
+                        key={key}
+                        className="px-2 py-0.5 rounded-md text-[11px] font-semibold"
+                        style={{ backgroundColor: PERM_COLORS[key].bg, color: PERM_COLORS[key].color }}>
+                        {label}
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => setDeleteTarget(s)}
+                      className="btn-icon w-7 h-7"
+                      title="Remove">
+                      <svg className="w-3.5 h-3.5" style={{ color: "var(--color-danger)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} strokeLinecap="round">
+                        <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                        <path d="M10 11v6M14 11v6M9 6V4h6v2"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
 
-        <Card className='mt-6' style={{ backgroundColor: "var(--color-infoLight)", borderColor: "var(--color-info)" }}>
-          <h3 className='text-base font-bold mb-3' style={{ color: "var(--color-info)" }}>
-            About Staff Management
-          </h3>
-          <ul className='text-sm space-y-2' style={{ color: "var(--color-info)" }}>
-            <li>• Staff can be assigned to specific offices or have access to all locations</li>
-            <li>• Permissions control what actions staff members can perform</li>
-            <li>• Staff without "View All Files" can only see files at their assigned location</li>
-            <li>• Multiple permissions can be granted to a single staff member</li>
-          </ul>
-        </Card>
-      </main>
-    </div>
+        <p className="text-xs px-1" style={{ color: "var(--color-textSubtle)" }}>
+          {staff.length} {staff.length === 1 ? "employee" : "employees"}
+        </p>
+      </div>
+    </AppShell>
   );
 }

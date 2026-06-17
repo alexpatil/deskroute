@@ -14,15 +14,28 @@ enum UserRole {
     ADMIN
 }
 
-enum LocationType {
-    OFFICE
-    RTO
+enum Priority {
+    LOW
+    NORMAL
+    HIGH
+    URGENT
 }
+
+enum Plan {
+    FREE
+    STARTER
+    PRO
+}
+
+// ── Core application models ────────────────────────────────────────────────
 
 model User {
     id                   String        @id @default(cuid())
+    name                 String
     email                String        @unique
-    passwordHash         String
+    emailVerified        Boolean       @default(false)
+    image                String?
+    // Application-specific fields
     role                 UserRole      @default(STAFF)
     organizationId       String?
     organization         Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -35,6 +48,11 @@ model User {
     canManageLocations   Boolean       @default(false)
     createdAt            DateTime      @default(now())
     updatedAt            DateTime      @updatedAt
+    // Better Auth relations
+    sessions             Session[]
+    accounts             Account[]
+    auditLogs            AuditLog[]
+    invitationsSent      Invitation[]  @relation("InvitedBy")
 
     @@index([email])
     @@index([organizationId])
@@ -44,21 +62,32 @@ model User {
 model Organization {
     id           String       @id @default(cuid())
     name         String
+    slug         String?      @unique
+    industry     String?
+    settings     Json         @default("{}")
+    plan         Plan         @default(FREE)
+    isActive     Boolean      @default(true)
+    // Monotonic counter used to assign human-friendly, per-organization
+    // sequential file numbers (see File.fileNumber). Incremented atomically.
+    fileSeq      Int          @default(0)
     ownerUserId  String       @unique
     users        User[]
     locations    Location[]
     files        File[]
     fileStatuses FileStatus[]
+    auditLogs    AuditLog[]
+    invitations  Invitation[]
     createdAt    DateTime     @default(now())
     updatedAt    DateTime     @updatedAt
 
     @@index([ownerUserId])
+    @@index([slug])
 }
 
 model Location {
     id              String        @id @default(cuid())
     name            String
-    type            LocationType
+    type            String        @default("Branch")
     organizationId  String
     organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
     assignedUsers   User[]
@@ -89,8 +118,17 @@ model FileStatus {
 
 model File {
     id                String        @id @default(cuid())
-    clientName        String
-    serviceType       String
+    trackingNumber    String        @unique @default(cuid())
+    // Human-friendly sequential number, unique within an organization. Easy to
+    // hand-write at offices that don't print the QR code. Nullable so files
+    // created before this field existed remain valid.
+    fileNumber        Int?
+    referenceId       String?
+    subjectName       String
+    category          String
+    priority          Priority      @default(NORMAL)
+    dueDate           DateTime?
+    description       String?
     currentLocationId String
     currentLocation   Location      @relation("FileCurrentLocation", fields: [currentLocationId], references: [id])
     currentStatusId   String
@@ -103,10 +141,12 @@ model File {
     createdAt         DateTime      @default(now())
     updatedAt         DateTime      @updatedAt
 
+    @@unique([organizationId, fileNumber])
     @@index([organizationId])
     @@index([isCompleted])
     @@index([currentLocationId])
     @@index([currentStatusId])
+    @@index([trackingNumber])
 }
 
 model FileHistory {
@@ -128,4 +168,89 @@ model FileHistory {
     @@index([fileId])
     @@index([toLocationId])
     @@index([statusId])
+}
+
+model AuditLog {
+    id             String       @id @default(cuid())
+    organizationId String
+    organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    userId         String
+    user           User         @relation(fields: [userId], references: [id])
+    action         String
+    entityType     String
+    entityId       String
+    metadata       Json?
+    ipAddress      String?
+    createdAt      DateTime     @default(now())
+
+    @@index([organizationId, createdAt])
+    @@index([entityId])
+    @@index([userId])
+}
+
+model Invitation {
+    id             String       @id @default(cuid())
+    email          String
+    organizationId String
+    organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    role           String       @default("STAFF")
+    permissions    Json         @default("{}")
+    invitedById    String
+    invitedBy      User         @relation("InvitedBy", fields: [invitedById], references: [id])
+    token          String       @unique @default(cuid())
+    expiresAt      DateTime
+    acceptedAt     DateTime?
+    createdAt      DateTime     @default(now())
+
+    @@index([token])
+    @@index([organizationId])
+    @@index([email])
+}
+
+// ── Better Auth models ─────────────────────────────────────────────────────
+
+model Session {
+    id        String   @id
+    expiresAt DateTime
+    token     String   @unique
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    ipAddress String?
+    userAgent String?
+    userId    String
+    user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@index([userId])
+    @@index([token])
+}
+
+model Account {
+    id                    String    @id
+    accountId             String
+    providerId            String
+    userId                String
+    user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+    accessToken           String?
+    refreshToken          String?
+    idToken               String?
+    accessTokenExpiresAt  DateTime?
+    refreshTokenExpiresAt DateTime?
+    scope                 String?
+    password              String?
+    createdAt             DateTime  @default(now())
+    updatedAt             DateTime  @updatedAt
+
+    @@unique([providerId, accountId])
+    @@index([userId])
+}
+
+model Verification {
+    id         String    @id
+    identifier String
+    value      String
+    expiresAt  DateTime
+    createdAt  DateTime? @default(now())
+    updatedAt  DateTime? @updatedAt
+
+    @@index([identifier])
 }
