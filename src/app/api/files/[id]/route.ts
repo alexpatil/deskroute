@@ -12,11 +12,19 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { id } = await params;
     const file = await fileService.getById(id);
 
-    if (!file) {
+    // Scope to the caller's organization — never expose another org's file.
+    if (!file || file.organizationId !== user!.organizationId) {
       return NextResponse.json({ message: "File not found" }, { status: 404 });
     }
 
-    if (user.assignedLocationId && file.currentLocationId !== user.assignedLocationId) {
+    // Location-scoped staff (without "view all files") only see files currently
+    // at their assigned office.
+    if (
+      user!.role === "STAFF" &&
+      !user!.canViewAllFiles &&
+      user!.assignedLocationId &&
+      file.currentLocationId !== user!.assignedLocationId
+    ) {
       return NextResponse.json({ message: "Access denied" }, { status: 404 });
     }
 

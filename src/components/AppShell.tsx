@@ -15,7 +15,6 @@ import {
   Plus,
   Search,
   Settings,
-  Tags,
   Users,
 } from "lucide-react";
 import Link from "next/link";
@@ -69,8 +68,11 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Files", icon: FileText, always: true },
   { href: "/locations", label: "Offices", icon: Building2, perm: "canManageLocations" },
-  { href: "/staff", label: "Team", icon: Users, perm: "canManageStaff" },
-  { href: "/file-statuses", label: "Statuses", icon: Tags, perm: "canConfigureStatuses" },
+  // Staff management is owner-only on the API (requireOwner), so gate the nav
+  // the same way instead of by canManageStaff (which the API never honors).
+  { href: "/staff", label: "Team", icon: Users, ownerOnly: true },
+  // Statuses lives under Settings → Statuses (keeps the nav balanced around the
+  // centered "New File" action on mobile).
   { href: "/settings", label: "Settings", icon: Settings, ownerOnly: true },
 ];
 
@@ -135,21 +137,20 @@ function Sidebar({ user }: { user: ShellUser | null }) {
       </nav>
 
       {/* User */}
-      <div className="border-t border-[#2A2620] p-4">
-        <div className="flex items-center gap-3">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#C0392B] text-sm font-semibold text-white">
-            {initials}
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium capitalize text-white">{displayName}</p>
-            <p className="truncate text-xs text-white/60">{role}</p>
-          </div>
+      <div className="flex items-center gap-3 border-t border-[#2A2620] p-4">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#C0392B] text-sm font-semibold text-white">
+          {initials}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium capitalize text-white">{displayName}</p>
+          <p className="truncate text-xs text-white/60">{role}</p>
         </div>
         <button
           onClick={signOut}
-          className="mt-3 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-white/70 transition-colors hover:bg-[#2A2620] hover:text-white">
-          <LogOut className="size-4" />
-          Sign out
+          title="Sign out"
+          aria-label="Sign out"
+          className="shrink-0 cursor-pointer text-[#6B6560] transition-colors hover:text-[#C0392B]">
+          <LogOut className="size-4.5" />
         </button>
       </div>
     </div>
@@ -160,30 +161,49 @@ function Sidebar({ user }: { user: ShellUser | null }) {
 function MobileTabBar({ user }: { user: ShellUser | null }) {
   const pathname = usePathname();
   const items = useNavItems(user);
+  const mid = Math.ceil(items.length / 2);
+  const left = items.slice(0, mid);
+  const right = items.slice(mid);
+
+  const renderTab = (item: NavItem) => {
+    const Icon = item.icon;
+    const active = isActive(pathname, item.href);
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        aria-label={item.label}
+        aria-current={active ? "page" : undefined}
+        className={cn(
+          "flex flex-1 flex-col items-center justify-end gap-1 py-1",
+          active ? "text-[#C0392B]" : "text-[#6B6560]",
+        )}>
+        <Icon className="size-5.5" />
+        <span className="text-[11px] font-medium leading-none">{item.label}</span>
+      </Link>
+    );
+  };
+
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 flex h-16 items-center justify-around border-t border-[#E0DBD0] bg-white lg:hidden">
-      {items.map((item) => {
-        const Icon = item.icon;
-        const active = isActive(pathname, item.href);
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            aria-label={item.label}
-            aria-current={active ? "page" : undefined}
-            className="flex flex-1 items-center justify-center">
-            <span
-              className={cn(
-                "flex items-center justify-center rounded-xl transition-all",
-                active
-                  ? "size-12 border-2 border-[#C0392B] bg-[#C0392B]/5 text-[#C0392B]"
-                  : "size-10 text-[#6B6560]",
-              )}>
-              <Icon className={active ? "size-6" : "size-5"} />
-            </span>
-          </Link>
-        );
-      })}
+    <nav className="fixed inset-x-0 bottom-0 z-40 pb-[env(safe-area-inset-bottom)] lg:hidden">
+      <div className="relative mx-4 mb-4 flex items-end rounded-2xl border border-[#E0DBD0] bg-white px-2 pb-2 pt-3 shadow-[0_4px_24px_rgba(0,0,0,0.10)]">
+        {/* Left tab group */}
+        <div className="flex flex-1 justify-around">{left.map(renderTab)}</div>
+
+        {/* Reserved gap for the centered action button */}
+        <div className="w-16 shrink-0" aria-hidden />
+
+        {/* Right tab group */}
+        <div className="flex flex-1 justify-around">{right.map(renderTab)}</div>
+
+        {/* Elevated primary action — always horizontally centered */}
+        <Link
+          href="/files/new"
+          aria-label="New file"
+          className="absolute left-1/2 top-0 flex size-14 -translate-x-1/2 -translate-y-5 items-center justify-center rounded-full bg-[#C0392B] text-white shadow-[0_4px_24px_rgba(0,0,0,0.10)] ring-4 ring-white transition-colors hover:bg-[#a83324]">
+          <Plus className="size-6" />
+        </Link>
+      </div>
     </nav>
   );
 }
@@ -343,7 +363,7 @@ export function AppShell({ children, title, actions, backHref }: AppShellProps) 
         </header>
 
         {/* Main */}
-        <main className="flex-1 overflow-y-auto bg-[#F7F4EE] pb-20 lg:pb-0">{children}</main>
+        <main className="flex-1 overflow-y-auto bg-[#F7F4EE] pb-24 lg:pb-0">{children}</main>
       </div>
 
       <MobileTabBar user={user} />

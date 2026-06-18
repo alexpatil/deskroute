@@ -66,7 +66,8 @@ export async function GET(request: NextRequest) {
 
     let locationId: string | undefined;
 
-    if (user.role === "STAFF") {
+    // Staff are scoped to their assigned office unless granted "view all files".
+    if (user.role === "STAFF" && !user.canViewAllFiles) {
       if (!user.assignedLocationId) {
         return NextResponse.json({ message: "No location assigned" }, { status: 403 });
       }

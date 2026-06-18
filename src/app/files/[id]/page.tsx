@@ -9,8 +9,11 @@ import { useToast } from "@/components/Toast";
 import type { FileWithHistory } from "@/features/files/file.types";
 import { formatFileNumber } from "@/features/files/file.utils";
 import { httpService } from "@/lib/httpService";
+import { Printer } from "lucide-react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import QRCode from "react-qr-code";
 
 interface User {
   id: string;
@@ -46,8 +49,10 @@ export default function FileDetailPage() {
   const [editLocationId, setEditLocationId] = useState("");
   const [editStatusId, setEditStatusId] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [origin, setOrigin] = useState("");
 
   useEffect(() => {
+    setOrigin(window.location.origin);
     loadData();
   }, [fileId]);
 
@@ -248,6 +253,27 @@ export default function FileDetailPage() {
             </Button>
           </div>
         )}
+
+        {/* QR Receipt — available for any file, any time */}
+        <div className="rounded-xl border border-[#E0DBD0] bg-white p-5">
+          <div className="flex items-center gap-4">
+            <div className="shrink-0 rounded-lg border border-[#E0DBD0] bg-white p-2">
+              <QRCode value={origin ? `${origin}/files/${file.id}` : ""} size={84} bgColor="#ffffff" fgColor="#1A1814" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-mono text-lg tracking-wider text-[#1A1814]">{formatFileNumber(file)}</p>
+              <p className="mt-0.5 text-xs text-[#6B6560]">
+                Anyone can scan this to see the file&apos;s live status.
+              </p>
+            </div>
+          </div>
+          <Link
+            href={`/files/${file.id}/receipt`}
+            className="mt-4 flex h-9 w-full items-center justify-center gap-2 rounded-md border border-[#C0392B] text-sm font-semibold text-[#C0392B] transition-colors hover:bg-[#C0392B] hover:text-white">
+            <Printer className="size-4" />
+            Print receipt
+          </Link>
+        </div>
 
         <Card>
           <h3 className='text-lg font-bold mb-4' style={{ color: "var(--color-text)" }}>

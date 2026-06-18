@@ -6,6 +6,7 @@ import { ConfirmModal } from "@/components/ConfirmModal";
 import { PageLoader } from "@/components/Loading";
 import { useToast } from "@/components/Toast";
 import { httpService } from "@/lib/httpService";
+import { Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -115,14 +116,7 @@ export default function StaffManagementPage() {
   if (loading) return <PageLoader />;
 
   return (
-    <AppShell
-      title="Employees"
-      backHref="/dashboard"
-      actions={
-        <Button size="sm" onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "Cancel" : "+ Add Staff"}
-        </Button>
-      }>
+    <AppShell title="Employees" backHref="/dashboard">
       <ConfirmModal
         isOpen={!!deleteTarget}
         title="Remove staff member?"
@@ -133,6 +127,28 @@ export default function StaffManagementPage() {
       />
 
       <div className="max-w-5xl mx-auto px-6 py-6 space-y-4">
+        {/* Page header */}
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h1 className="font-serif text-2xl text-[#1A1814]">Team</h1>
+            <p className="text-sm text-[#6B6560]">People who can access this workspace</p>
+          </div>
+          {showForm ? (
+            <button
+              onClick={() => { setShowForm(false); setFormError(""); }}
+              className="inline-flex h-9 items-center rounded-md border border-[#E0DBD0] px-3.5 text-sm font-medium text-[#6B6560] transition-colors hover:bg-[#EEE9DF]">
+              Cancel
+            </button>
+          ) : (
+            <button
+              onClick={() => setShowForm(true)}
+              className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[#C0392B] px-3.5 text-sm font-semibold text-white transition-colors hover:bg-[#a83324]">
+              <Plus className="size-4" />
+              Invite member
+            </button>
+          )}
+        </div>
+
         {/* Inline add form */}
         {showForm && (
           <div

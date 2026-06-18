@@ -11,6 +11,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   try {
     const { id } = await params;
     const location = await locationService.getById(id);
+    if (!location || location.organizationId !== user!.organizationId) {
+      return NextResponse.json({ message: "Location not found" }, { status: 404 });
+    }
     return NextResponse.json(location);
   } catch (error) {
     console.error("Get location error:", error);

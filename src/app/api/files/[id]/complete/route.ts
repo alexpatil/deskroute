@@ -21,6 +21,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ message: "File not found" }, { status: 404 });
     }
 
+    // Location-scoped staff (without "view all files") can only act on files at
+    // their assigned office — consistent with the GET/PUT handlers.
+    if (
+      user!.role === "STAFF" &&
+      !user!.canViewAllFiles &&
+      user!.assignedLocationId &&
+      file.currentLocationId !== user!.assignedLocationId
+    ) {
+      return NextResponse.json({ message: "Access denied" }, { status: 404 });
+    }
+
     if (file.isCompleted) {
       return NextResponse.json({ message: "File is already completed" }, { status: 400 });
     }
