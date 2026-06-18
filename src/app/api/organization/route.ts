@@ -4,8 +4,38 @@ import { organizationService } from "@/features/organization/organization.servic
 import prisma from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
-export async function POST() {
-  return NextResponse.json({ message: "Organization creation moved to system admin" }, { status: 403 });
+export async function POST(request: NextRequest) {
+  try {
+    const session = await auth.api.getSession({ headers: request.headers });
+
+    if (!session) {
+      return NextResponse.json({ message: "Not authenticated" }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { name, type, logoUrl, primaryContact, country, timezone } = body;
+
+    if (!name?.trim()) {
+      return NextResponse.json({ message: "Organization name is required" }, { status: 400 });
+    }
+
+    const organization = await organizationService.createForUser(session.user.id, {
+      name: name.trim(),
+      type,
+      logoUrl,
+      primaryContact,
+      country,
+      timezone,
+    });
+
+    return NextResponse.json(organization);
+  } catch (error: any) {
+    console.error("Create organization error:", error);
+    return NextResponse.json(
+      { message: error.message || "Internal server error" },
+      { status: 500 },
+    );
+  }
 }
 
 export async function GET(request: NextRequest) {

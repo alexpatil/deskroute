@@ -14,6 +14,17 @@ export const auth = betterAuth({
       verify: ({ hash, password }) => bcrypt.compare(password, hash),
     },
   },
+  // Google sign-in is enabled only when credentials are present, so the app
+  // keeps working in environments where Google OAuth hasn't been configured.
+  socialProviders:
+    process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+      ? {
+          google: {
+            clientId: process.env.GOOGLE_CLIENT_ID,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+          },
+        }
+      : undefined,
   user: {
     additionalFields: {
       role: {

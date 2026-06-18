@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { randomUUID } from "crypto";
 import type {
+  CreateOrganizationForUserRequest,
   CreateOrganizationRequest,
   Organization,
   OrganizationWithOwner,
@@ -94,6 +95,64 @@ export const organizationService = {
         email: result.owner.email,
       },
     };
+  },
+
+  // Self-service onboarding: an existing, signed-in user creates their own
+  // organization and automatically becomes its Owner with full permissions.
+  async createForUser(
+    userId: string,
+    data: CreateOrganizationForUserRequest,
+  ): Promise<Organization> {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new Error("User not found");
+    if (user.role === "SYSTEM_ADMIN") throw new Error("System admins cannot own an organization");
+    if (user.organizationId) throw new Error("You already belong to an organization");
+
+    const slug = generateSlug(data.name);
+
+    const organization = await prisma.$transaction(async (tx) => {
+      const org = await tx.organization.create({
+        data: {
+          name: data.name,
+          slug,
+          industry: data.type ?? null,
+          ownerUserId: userId,
+          settings: {
+            logoUrl: data.logoUrl ?? null,
+            primaryContact: data.primaryContact ?? null,
+            country: data.country ?? null,
+            timezone: data.timezone ?? null,
+          },
+        },
+      });
+
+      // The creator becomes the Owner (ADMIN role) with all permissions granted.
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          organizationId: org.id,
+          role: "ADMIN",
+          canViewAllFiles: true,
+          canManageOffices: true,
+          canManageStaff: true,
+          canConfigureStatuses: true,
+          canManageLocations: true,
+        },
+      });
+
+      // Seed a default status workflow so the dashboard is usable immediately.
+      await tx.fileStatus.createMany({
+        data: [
+          { name: "Pending", organizationId: org.id, isEnabled: true },
+          { name: "In Progress", organizationId: org.id, isEnabled: true },
+          { name: "Completed", organizationId: org.id, isEnabled: true },
+        ],
+      });
+
+      return org;
+    });
+
+    return toOrg(organization);
   },
 
   async update(organizationId: string, data: UpdateOrganizationRequest): Promise<Organization> {

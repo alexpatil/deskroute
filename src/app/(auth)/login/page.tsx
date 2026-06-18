@@ -2,7 +2,9 @@
 "use client";
 
 import { Button } from "@/components/Button";
+import { GoogleButton } from "@/components/GoogleButton";
 import { authClient } from "@/lib/auth-client";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -79,6 +81,16 @@ export default function LoginPage() {
             </div>
           )}
 
+          <GoogleButton callbackURL="/onboarding" label="Continue with Google" onError={setError} />
+
+          <div className="my-5 flex items-center gap-3">
+            <span className="h-px flex-1" style={{ backgroundColor: "var(--color-border)" }} />
+            <span className="text-xs" style={{ color: "var(--color-textSubtle)" }}>
+              or
+            </span>
+            <span className="h-px flex-1" style={{ backgroundColor: "var(--color-border)" }} />
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold mb-1.5" style={{ color: "var(--color-text)" }}>
@@ -114,6 +126,13 @@ export default function LoginPage() {
               Sign in
             </Button>
           </form>
+
+          <p className="mt-6 text-center text-sm" style={{ color: "var(--color-textMuted)" }}>
+            New to Deskroute?{" "}
+            <Link href="/register" className="font-semibold" style={{ color: "var(--color-primary)" }}>
+              Create an account
+            </Link>
+          </p>
         </div>
 
         <p className="text-center text-xs mt-6" style={{ color: "var(--color-textSubtle)" }}>

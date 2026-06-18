@@ -5,6 +5,16 @@ export interface CreateOrganizationRequest {
   industry?: string;
 }
 
+// Self-service creation by an already-registered user, who becomes the owner.
+export interface CreateOrganizationForUserRequest {
+  name: string;
+  type?: string;
+  logoUrl?: string;
+  primaryContact?: string;
+  country?: string;
+  timezone?: string;
+}
+
 export interface UpdateOrganizationRequest {
   name?: string;
   isActive?: boolean;
