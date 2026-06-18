@@ -34,12 +34,7 @@ export function GoogleButton({
       type="button"
       onClick={handleClick}
       disabled={loading}
-      className="flex h-10 w-full items-center justify-center gap-2.5 rounded-lg border text-sm font-medium transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
-      style={{
-        borderColor: "var(--color-border)",
-        backgroundColor: "var(--color-surface)",
-        color: "var(--color-text)",
-      }}>
+      className="flex h-10 w-full items-center justify-center gap-2.5 rounded-lg border border-[#E0DBD0] bg-white text-sm font-medium text-[#1A1814] transition-colors hover:bg-[#F7F4EE] disabled:cursor-not-allowed disabled:opacity-50">
       <svg className="size-4.5 shrink-0" viewBox="0 0 24 24" aria-hidden>
         <path
           fill="#4285F4"

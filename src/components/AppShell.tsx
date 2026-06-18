@@ -1,51 +1,53 @@
 "use client";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { File } from "@/features/files/file.types";
 import { formatFileNumber, matchesFileNumber } from "@/features/files/file.utils";
 import { authClient } from "@/lib/auth-client";
 import { httpService } from "@/lib/httpService";
 import { cn } from "@/lib/utils";
 import {
-  Bell,
   Building2,
   ChevronLeft,
-  FilePlus2,
-  LayoutGrid,
+  FileText,
   LogOut,
   type LucideIcon,
-  Menu as MenuIcon,
-  Moon,
-  Route,
+  Plus,
   Search,
-  Sun,
+  Settings,
   Tags,
   Users,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useEffect, useRef, useState } from "react";
-import { useTheme } from "./ThemeProvider";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 interface ShellUser {
   email: string;
+  name?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
   isOwner: boolean;
   canManageLocations: boolean;
   canConfigureStatuses: boolean;
   canManageStaff: boolean;
+}
+
+/** Prefer a real name (first/last, then full name), falling back to the email. */
+function displayNameOf(user: ShellUser | null): string {
+  const full = [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim();
+  if (full) return full;
+  if (user?.name?.trim()) return user.name.trim();
+  return user?.email?.split("@")[0] ?? "User";
+}
+
+function initialsOf(user: ShellUser | null): string {
+  const f = user?.firstName?.[0];
+  const l = user?.lastName?.[0];
+  if (f || l) return `${f ?? ""}${l ?? ""}`.toUpperCase();
+  const name = displayNameOf(user);
+  return name[0]?.toUpperCase() ?? "?";
 }
 interface AppShellProps {
   children: ReactNode;
@@ -61,37 +63,39 @@ interface NavItem {
   icon: LucideIcon;
   always?: boolean;
   perm?: NavPerm;
+  ownerOnly?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutGrid, always: true },
-  { href: "/files/new", label: "New File", icon: FilePlus2, always: true },
+  { href: "/dashboard", label: "Files", icon: FileText, always: true },
   { href: "/locations", label: "Offices", icon: Building2, perm: "canManageLocations" },
+  { href: "/staff", label: "Team", icon: Users, perm: "canManageStaff" },
   { href: "/file-statuses", label: "Statuses", icon: Tags, perm: "canConfigureStatuses" },
-  { href: "/staff", label: "Employees", icon: Users, perm: "canManageStaff" },
+  { href: "/settings", label: "Settings", icon: Settings, ownerOnly: true },
 ];
 
-/* ─── Theme toggle ───────────────────────────────────────────────────────── */
-function ThemeToggle() {
-  const { theme, toggleTheme } = useTheme();
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button variant='ghost' size='icon' onClick={toggleTheme} aria-label='Toggle theme'>
-          <Sun className='size-4.5 scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90' />
-          <Moon className='absolute size-4.5 scale-0 rotate-90 transition-all dark:scale-100 dark:rotate-0' />
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{theme === "dark" ? "Light mode" : "Dark mode"}</TooltipContent>
-    </Tooltip>
-  );
+function useNavItems(user: ShellUser | null) {
+  return NAV_ITEMS.filter((item) => {
+    if (item.always) return true;
+    if (!user) return false;
+    if (item.ownerOnly) return user.isOwner;
+    if (!item.perm) return false;
+    return user.isOwner || user[item.perm];
+  });
 }
 
-/* ─── User menu ──────────────────────────────────────────────────────────── */
-function UserMenu({ user }: { user: ShellUser | null }) {
-  const initials = user?.email?.[0]?.toUpperCase() ?? "?";
-  const displayName = user?.email?.split("@")[0] ?? "User";
-  const role = user?.isOwner ? "Super Admin" : "Staff";
+function isActive(pathname: string, href: string) {
+  if (href === "/dashboard") return pathname === "/dashboard" || pathname === "/";
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+/* ─── Sidebar (desktop) ──────────────────────────────────────────────────── */
+function Sidebar({ user }: { user: ShellUser | null }) {
+  const pathname = usePathname();
+  const items = useNavItems(user);
+  const initials = initialsOf(user);
+  const displayName = displayNameOf(user);
+  const role = user?.isOwner ? "Owner" : "Staff";
 
   const signOut = async () => {
     await authClient.signOut();
@@ -99,75 +103,88 @@ function UserMenu({ user }: { user: ShellUser | null }) {
   };
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button className='flex items-center gap-2 rounded-full p-0.5 pr-2 outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring'>
-          <Avatar className='size-8'>
-            <AvatarFallback className='bg-primary text-xs font-semibold text-primary-foreground'>{initials}</AvatarFallback>
-          </Avatar>
-          <div className='hidden text-left sm:block'>
-            <p className='text-[13px] font-medium capitalize leading-tight'>{displayName}</p>
-            <p className='text-[11px] leading-tight text-muted-foreground'>{role}</p>
-          </div>
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align='end' className='w-56'>
-        <DropdownMenuLabel className='flex flex-col gap-0.5'>
-          <span className='truncate text-sm font-medium'>{user?.email ?? "—"}</span>
-          <span className='text-xs font-normal text-muted-foreground'>{role}</span>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem variant='destructive' onClick={signOut}>
-          <LogOut className='size-4' />
-          Sign out
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
+    <div className="flex h-full flex-col bg-[#1A1814] text-white">
+      {/* Logo */}
+      <Link href="/dashboard" className="flex items-center gap-2.5 px-5 py-5">
+        <span className="flex size-7 items-center justify-center rounded-md bg-[#C0392B]">
+          <FileText className="size-4 text-white" />
+        </span>
+        <span className="font-serif text-2xl leading-none">DeskRoute</span>
+      </Link>
 
-/* ─── Sidebar nav ────────────────────────────────────────────────────────── */
-function SidebarNav({ user, collapsed, onNavigate }: { user: ShellUser | null; collapsed: boolean; onNavigate?: () => void }) {
-  const pathname = usePathname();
-
-  const items = NAV_ITEMS.filter((item) => {
-    if (item.always) return true;
-    if (!item.perm || !user) return false;
-    return user.isOwner || user[item.perm];
-  });
-
-  return (
-    <div className='flex h-full flex-col bg-sidebar'>
-      <nav className='flex-1 space-y-1 overflow-y-auto p-2'>
+      {/* Nav */}
+      <nav className="mt-2 flex-1 overflow-y-auto">
         {items.map((item) => {
           const Icon = item.icon;
-          const active = pathname === item.href || (item.href === "/dashboard" && pathname === "/");
-
-          const link = (
+          const active = isActive(pathname, item.href);
+          return (
             <Link
+              key={item.href}
               href={item.href}
-              onClick={onNavigate}
               className={cn(
-                "flex h-9 items-center gap-3 rounded-md px-3 text-sm font-medium transition-colors",
-                collapsed && "justify-center px-0",
-                active ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                "flex h-11 items-center gap-3 border-l-[3px] px-5 text-sm transition-colors",
+                active
+                  ? "border-[#C0392B] bg-[#2A2620] font-medium text-white"
+                  : "border-transparent text-white/70 hover:bg-[#2A2620] hover:text-white",
               )}>
-              <Icon className='size-4.5 shrink-0' />
-              {!collapsed && <span className='truncate'>{item.label}</span>}
+              <Icon className="size-4.5 shrink-0" />
+              {item.label}
             </Link>
-          );
-
-          return collapsed ? (
-            <Tooltip key={item.href}>
-              <TooltipTrigger asChild>{link}</TooltipTrigger>
-              <TooltipContent side='right'>{item.label}</TooltipContent>
-            </Tooltip>
-          ) : (
-            <div key={item.href}>{link}</div>
           );
         })}
       </nav>
+
+      {/* User */}
+      <div className="border-t border-[#2A2620] p-4">
+        <div className="flex items-center gap-3">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#C0392B] text-sm font-semibold text-white">
+            {initials}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium capitalize text-white">{displayName}</p>
+            <p className="truncate text-xs text-white/60">{role}</p>
+          </div>
+        </div>
+        <button
+          onClick={signOut}
+          className="mt-3 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-white/70 transition-colors hover:bg-[#2A2620] hover:text-white">
+          <LogOut className="size-4" />
+          Sign out
+        </button>
+      </div>
     </div>
+  );
+}
+
+/* ─── Mobile bottom tab bar ──────────────────────────────────────────────── */
+function MobileTabBar({ user }: { user: ShellUser | null }) {
+  const pathname = usePathname();
+  const items = useNavItems(user);
+  return (
+    <nav className="fixed inset-x-0 bottom-0 z-40 flex h-16 items-center justify-around border-t border-[#E0DBD0] bg-white lg:hidden">
+      {items.map((item) => {
+        const Icon = item.icon;
+        const active = isActive(pathname, item.href);
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            aria-label={item.label}
+            aria-current={active ? "page" : undefined}
+            className="flex flex-1 items-center justify-center">
+            <span
+              className={cn(
+                "flex items-center justify-center rounded-xl transition-all",
+                active
+                  ? "size-12 border-2 border-[#C0392B] bg-[#C0392B]/5 text-[#C0392B]"
+                  : "size-10 text-[#6B6560]",
+              )}>
+              <Icon className={active ? "size-6" : "size-5"} />
+            </span>
+          </Link>
+        );
+      })}
+    </nav>
   );
 }
 
@@ -179,7 +196,6 @@ function HeaderSearch() {
   const [open, setOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const ensureLoaded = async () => {
     if (loaded) return;
@@ -192,22 +208,6 @@ function HeaderSearch() {
     }
   };
 
-  // ⌘K / Ctrl+K focuses search
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        inputRef.current?.focus();
-        setOpen(true);
-        void ensureLoaded();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded]);
-
-  // Close on outside click
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
@@ -237,11 +237,10 @@ function HeaderSearch() {
   };
 
   return (
-    <div ref={wrapRef} className='relative hidden max-w-md flex-1 md:block'>
-      <div className='relative'>
-        <Search className='absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground' />
+    <div ref={wrapRef} className="relative hidden max-w-xs flex-1 md:block">
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#6B6560]" />
         <Input
-          ref={inputRef}
           value={q}
           onChange={(e) => {
             setQ(e.target.value);
@@ -255,33 +254,37 @@ function HeaderSearch() {
             if (e.key === "Enter" && results[0]) go(results[0].id);
             else if (e.key === "Escape") setOpen(false);
           }}
-          placeholder='Search files by number, subject…'
-          className='h-9 pl-9'
+          aria-label="Search files"
+          placeholder="Search files…"
+          className="h-9 pl-9"
         />
-        <kbd className='pointer-events-none absolute right-2.5 top-1/2 hidden -translate-y-1/2 select-none items-center rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground sm:inline-flex'>
-          ⌘K
-        </kbd>
       </div>
 
       {open && ql && (
-        <div className='absolute left-0 right-0 top-11 z-50 overflow-hidden rounded-xl border bg-popover shadow-lg animate-fade-in'>
+        <div className="absolute left-0 right-0 top-11 z-50 overflow-hidden rounded-xl border border-[#E0DBD0] bg-white shadow-md">
           {results.length === 0 ? (
-            <p className='px-3 py-6 text-center text-sm text-muted-foreground'>{loaded ? "No files found" : "Searching…"}</p>
+            <p className="px-3 py-6 text-center text-sm text-[#6B6560]">
+              {loaded ? "No files found" : "Searching…"}
+            </p>
           ) : (
-            <ul className='max-h-80 overflow-y-auto p-1'>
+            <ul className="max-h-80 overflow-y-auto p-1">
               {results.map((f) => (
                 <li key={f.id}>
                   <button
                     onClick={() => go(f.id)}
-                    className='flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-accent'>
-                    <span className={cn("size-1.5 shrink-0 rounded-full", f.isCompleted ? "bg-success" : "bg-warning")} />
-                    <div className='min-w-0 flex-1'>
-                      <p className='truncate text-sm font-medium'>{f.subjectName}</p>
-                      <p className='truncate text-xs text-muted-foreground'>
-                        <span className='font-mono'>{formatFileNumber(f)}</span> · {f.category}
+                    className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-[#F7F4EE]">
+                    <span
+                      className={cn(
+                        "size-1.5 shrink-0 rounded-full",
+                        f.isCompleted ? "bg-[#27AE60]" : "bg-[#E67E22]",
+                      )}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-[#1A1814]">{f.subjectName}</p>
+                      <p className="truncate text-xs text-[#6B6560]">
+                        <span className="font-mono">{formatFileNumber(f)}</span> · {f.category}
                       </p>
                     </div>
-                    <span className='hidden shrink-0 text-xs text-muted-foreground sm:block'>{f.currentLocation.name}</span>
                   </button>
                 </li>
               ))}
@@ -297,8 +300,6 @@ function HeaderSearch() {
 export function AppShell({ children, title, actions, backHref }: AppShellProps) {
   const router = useRouter();
   const [user, setUser] = useState<ShellUser | null>(null);
-  const [collapsed, setCollapsed] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     httpService
@@ -307,92 +308,45 @@ export function AppShell({ children, title, actions, backHref }: AppShellProps) 
       .catch(() => {});
   }, []);
 
-  const sidebarWidth = collapsed ? 64 : 240;
-
   return (
-    <div className='flex h-screen flex-col overflow-hidden bg-background'>
-      {/* ── Top bar ── */}
-      <header className='z-30 flex h-14 shrink-0 items-center gap-3 border-b bg-card px-3'>
-        {/* Brand + toggle */}
-        <div className='flex shrink-0 items-center gap-2 overflow-hidden transition-all duration-200' style={{ width: sidebarWidth - 12 }}>
-          <Button variant='ghost' size='icon' className='hidden lg:flex' onClick={() => setCollapsed((c) => !c)} aria-label='Toggle sidebar'>
-            <MenuIcon className='size-5' />
-          </Button>
-          <Button variant='ghost' size='icon' className='lg:hidden' onClick={() => setMobileOpen(true)} aria-label='Open menu'>
-            <MenuIcon className='size-5' />
-          </Button>
-          {!collapsed && (
-            <Link href='/dashboard' className='flex min-w-0 items-center gap-2'>
-              <div className='flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary'>
-                <Route className='size-4 text-primary-foreground' />
-              </div>
-              <span className='truncate text-[15px] font-bold tracking-tight'>DeskRoute</span>
+    <div className="flex h-screen overflow-hidden bg-[#F7F4EE] text-[#1A1814]">
+      {/* Desktop sidebar */}
+      <aside className="hidden w-60 shrink-0 lg:block">
+        <Sidebar user={user} />
+      </aside>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Top bar */}
+        <header className="z-30 flex h-14 shrink-0 items-center gap-3 border-b border-[#E0DBD0] bg-white px-4 sm:px-6">
+          {backHref ? (
+            <button
+              onClick={() => router.push(backHref)}
+              aria-label="Back"
+              className="-ml-1 flex size-8 items-center justify-center rounded-md text-[#6B6560] transition-colors hover:bg-[#F7F4EE] hover:text-[#1A1814]">
+              <ChevronLeft className="size-5" />
+            </button>
+          ) : (
+            <span className="font-serif text-xl leading-none text-[#1A1814] lg:hidden">DeskRoute</span>
+          )}
+          <span className="truncate text-sm text-[#6B6560]">{title}</span>
+
+          <div className="ml-auto flex items-center gap-2">
+            {actions}
+            <HeaderSearch />
+            <Link
+              href="/files/new"
+              className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[#C0392B] px-3.5 text-sm font-semibold text-white transition-colors hover:bg-[#a83324]">
+              <Plus className="size-4" />
+              <span className="hidden sm:inline">New File</span>
             </Link>
-          )}
-        </div>
-
-        {/* Search */}
-        <HeaderSearch />
-
-        {/* Right cluster */}
-        <div className='ml-auto flex items-center gap-1'>
-          {actions && (
-            <>
-              <div className='mr-1 flex items-center gap-1.5'>{actions}</div>
-              <Separator orientation='vertical' className='mx-1 h-5!' />
-            </>
-          )}
-
-          <ThemeToggle />
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant='ghost' size='icon' className='relative' aria-label='Notifications'>
-                <Bell className='size-4.5' />
-                <span className='absolute right-1.5 top-1.5 flex size-3.5 items-center justify-center rounded-full bg-destructive text-[9px] font-bold text-white'>
-                  12
-                </span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Notifications</TooltipContent>
-          </Tooltip>
-
-          <Separator orientation='vertical' className='mx-1 h-5!' />
-          <UserMenu user={user} />
-        </div>
-      </header>
-
-      {/* ── Body ── */}
-      <div className='flex min-h-0 flex-1 overflow-hidden'>
-        {/* Desktop sidebar */}
-        <aside className='hidden shrink-0 overflow-hidden border-r transition-all duration-200 ease-out lg:block' style={{ width: sidebarWidth }}>
-          <SidebarNav user={user} collapsed={collapsed} />
-        </aside>
-
-        {/* Mobile drawer */}
-        {mobileOpen && (
-          <div className='fixed inset-0 z-50 flex lg:hidden'>
-            <div className='fixed inset-0 bg-black/50' onClick={() => setMobileOpen(false)} />
-            <aside className='relative z-10 w-64 border-r'>
-              <SidebarNav user={user} collapsed={false} onNavigate={() => setMobileOpen(false)} />
-            </aside>
           </div>
-        )}
+        </header>
 
-        {/* Page */}
-        <div className='flex min-h-0 min-w-0 flex-1 flex-col'>
-          {backHref && (
-            <div className='flex h-11 shrink-0 items-center gap-2 border-b bg-card px-4'>
-              <Button variant='ghost' size='icon-sm' onClick={() => router.push(backHref)} aria-label='Back'>
-                <ChevronLeft className='size-4' />
-              </Button>
-              <h1 className='text-sm font-semibold'>{title}</h1>
-            </div>
-          )}
-          <main className='flex-1 overflow-y-auto'>{children}</main>
-        </div>
+        {/* Main */}
+        <main className="flex-1 overflow-y-auto bg-[#F7F4EE] pb-20 lg:pb-0">{children}</main>
       </div>
+
+      <MobileTabBar user={user} />
     </div>
   );
 }
-

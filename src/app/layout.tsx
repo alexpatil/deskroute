@@ -2,27 +2,35 @@ import { ToastProvider } from "@/components/Toast";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, Geist_Mono, Instrument_Serif } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
+// Body / UI — Inter. Mapped onto --font-geist-sans so the existing token bridge
+// (--font-sans) picks it up app-wide without touching every utility.
+const inter = Inter({
   variable: "--font-geist-sans",
   subsets: ["latin"],
 });
 
+// Codes, file numbers, timestamps.
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "Deskroute — File Tracking",
-  description: "Universal file tracking platform",
-};
+// Display / headings — Instrument Serif. Exposed as --font-instrument and wired
+// to Tailwind's `font-serif` in globals.css.
+const instrumentSerif = Instrument_Serif({
+  weight: "400",
+  style: ["normal", "italic"],
+  variable: "--font-instrument",
+  subsets: ["latin"],
+});
 
-// Runs synchronously before first paint — applies the `dark` class so shadcn
-// CSS variables resolve correctly immediately, eliminating the theme flash.
-const themeScript = `(function(){try{var t=localStorage.getItem('theme');if(!t){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}if(t==='dark'){document.documentElement.classList.add('dark');}}catch(e){}})()`;
+export const metadata: Metadata = {
+  title: "DeskRoute — Physical file tracking",
+  description: "Track physical files across multiple offices using QR codes.",
+};
 
 export default function RootLayout({
   children,
@@ -31,10 +39,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
-      </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body
+        className={`${inter.variable} ${geistMono.variable} ${instrumentSerif.variable} antialiased`}>
         <ThemeProvider>
           <TooltipProvider delayDuration={200}>
             <ToastProvider>{children}</ToastProvider>

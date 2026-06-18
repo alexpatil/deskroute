@@ -404,30 +404,46 @@ function PrintReceipt({
   createdAt: string;
 }) {
   return (
-    <div style={{ fontFamily: "sans-serif", padding: "32px", maxWidth: "420px", margin: "0 auto" }}>
+    <div
+      style={{
+        fontFamily: "sans-serif",
+        color: "#1A1814",
+        maxWidth: "360px",
+        margin: "24px auto",
+        padding: "24px",
+        border: "2px dashed #9A948A",
+        borderRadius: "12px",
+      }}>
       {/* Header */}
-      <div style={{ borderBottom: "2px solid #000", paddingBottom: "12px", marginBottom: "20px" }}>
-        <p style={{ fontSize: "11px", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "#666", margin: 0 }}>
-          File Tracking Receipt
-        </p>
-        <p style={{ fontSize: "22px", fontWeight: 900, margin: "4px 0 0" }}>Deskroute</p>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          borderBottom: "1px solid #E0DBD0",
+          paddingBottom: "12px",
+          marginBottom: "16px",
+        }}>
+        <span style={{ fontSize: "17px", fontWeight: 700 }}>DeskRoute</span>
+        <span style={{ fontSize: "10px", letterSpacing: "0.12em", textTransform: "uppercase", color: "#6B6560" }}>
+          File Receipt
+        </span>
       </div>
 
-      {/* Tracking number + QR */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "20px" }}>
+      {/* File number + QR — vertically centered */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
         <div>
-          <p style={{ fontSize: "10px", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "#666", margin: "0 0 4px" }}>
-            File Number
+          <p style={{ margin: 0, fontSize: "10px", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "#6B6560" }}>
+            File No.
           </p>
-          <p style={{ fontSize: "28px", fontWeight: 900, fontFamily: "monospace", letterSpacing: "0.05em", margin: 0 }}>
+          <p style={{ margin: "2px 0 0", fontSize: "30px", fontWeight: 800, fontFamily: "monospace", letterSpacing: "0.06em" }}>
             {shortCode}
           </p>
         </div>
-        <QRCode value={qrValue} size={90} />
+        <div style={{ padding: "6px", border: "1px solid #E0DBD0", borderRadius: "8px", background: "#fff" }}>
+          <QRCode value={qrValue} size={92} />
+        </div>
       </div>
-
-      {/* Divider */}
-      <div style={{ borderTop: "1px solid #ddd", marginBottom: "16px" }} />
 
       {/* Details */}
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
@@ -435,12 +451,12 @@ function PrintReceipt({
           {[
             ["Subject", file.subjectName],
             ["Category", file.category],
-            ["Branch", file.currentLocation.name],
+            ["Office", file.currentLocation.name],
             ["Status", file.currentStatus.name],
             ["Created", createdAt],
           ].map(([label, value]) => (
             <tr key={label}>
-              <td style={{ padding: "5px 0", fontWeight: 600, color: "#666", width: "80px", verticalAlign: "top" }}>
+              <td style={{ padding: "5px 0", fontWeight: 600, color: "#6B6560", width: "84px", verticalAlign: "top" }}>
                 {label}
               </td>
               <td style={{ padding: "5px 0", fontWeight: 500 }}>{value}</td>
@@ -450,9 +466,9 @@ function PrintReceipt({
       </table>
 
       {/* Footer */}
-      <div style={{ borderTop: "1px solid #ddd", marginTop: "20px", paddingTop: "12px" }}>
-        <p style={{ fontSize: "10px", color: "#999", margin: 0 }}>
-          Scan the QR code to view real-time file status · Powered by Deskroute
+      <div style={{ borderTop: "1px solid #E0DBD0", marginTop: "16px", paddingTop: "12px", textAlign: "center" }}>
+        <p style={{ fontSize: "10px", color: "#9A948A", margin: 0 }}>
+          Scan to view live file status at deskroute.vercel.app
         </p>
       </div>
     </div>

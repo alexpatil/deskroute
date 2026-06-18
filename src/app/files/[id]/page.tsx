@@ -5,6 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { PageLoader } from "@/components/Loading";
+import { useToast } from "@/components/Toast";
 import type { FileWithHistory } from "@/features/files/file.types";
 import { formatFileNumber } from "@/features/files/file.utils";
 import { httpService } from "@/lib/httpService";
@@ -32,6 +33,7 @@ interface FileStatus {
 export default function FileDetailPage() {
   const params = useParams();
   const fileId = params.id as string;
+  const toast = useToast();
 
   const [file, setFile] = useState<FileWithHistory | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -82,17 +84,18 @@ export default function FileDetailPage() {
     }
     setUpdating(true);
     try {
-      const updatedFile = await httpService.put<FileWithHistory>(`/api/files/${fileId}`, {
+      await httpService.put<FileWithHistory>(`/api/files/${fileId}`, {
         currentLocationId: editLocationId,
         currentStatusId: editStatusId,
       });
 
-      setFile(updatedFile);
-      setUpdating(false);
-      //await loadData();
+      // Re-fetch so the current location/status AND the route history reflect
+      // the hand-off we just recorded, instead of showing stale data.
+      await loadData();
+      setIsEditing(false);
+      toast("File updated", "success");
     } catch (err) {
-      //console.error("Failed to update file:", err);
-      alert(err instanceof Error ? err.message : "Failed to update file");
+      toast(err instanceof Error ? err.message : "Failed to update file", "error");
     } finally {
       setUpdating(false);
     }

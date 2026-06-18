@@ -286,3 +286,59 @@
 
 .data-row { transition: background-color 100ms ease; }
 .data-row:hover { background: var(--accent); }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   DeskRoute identity — parchment / ink / deep-red.
+   Overrides the shadcn token values above so the entire token-based app (shell,
+   ui/* primitives, and legacy --color-* pages) adopts the new palette in one
+   place. Light only: `.dark` is pinned to the same values (no dark mode).
+───────────────────────────────────────────────────────────────────────────── */
+:root,
+.dark {
+  --radius: 0.75rem;
+
+  --background: #f7f4ee;
+  --foreground: #1a1814;
+  --card: #ffffff;
+  --card-foreground: #1a1814;
+  --popover: #ffffff;
+  --popover-foreground: #1a1814;
+
+  --primary: #c0392b;
+  --primary-foreground: #ffffff;
+  --secondary: #eee9df;
+  --secondary-foreground: #1a1814;
+  --muted: #eee9df;
+  --muted-foreground: #6b6560;
+  --accent: #f2eee5;
+  --accent-foreground: #1a1814;
+
+  --destructive: #c0392b;
+  --destructive-foreground: #ffffff;
+
+  --border: #e0dbd0;
+  --input: #e0dbd0;
+  --ring: #c0392b;
+
+  --success: #27ae60;
+  --success-foreground: #ffffff;
+  --warning: #e67e22;
+  --warning-foreground: #ffffff;
+  --info: #6b6560;
+  --info-foreground: #ffffff;
+
+  /* Sidebar — dark ink with white text */
+  --sidebar: #1a1814;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #c0392b;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #2a2620;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #2a2620;
+  --sidebar-ring: #c0392b;
+}
+
+/* Display headings → Instrument Serif (Tailwind `font-serif`). */
+@theme inline {
+  --font-serif: var(--font-instrument);
+}

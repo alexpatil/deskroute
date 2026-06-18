@@ -1,73 +1,78 @@
 "use client";
 
 import { AppShell } from "@/components/AppShell";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { cn } from "@/lib/utils";
+import { EmptyState } from "@/components/EmptyState";
+import { FileNumberLabel } from "@/components/FileNumberLabel";
+import { FileStatusBadge } from "@/components/FileStatusBadge";
+import { SkeletonRow } from "@/components/SkeletonRow";
 import type { File } from "@/features/files/file.types";
-import { formatFileNumber, matchesFileNumber } from "@/features/files/file.utils";
+import { formatFileNumber } from "@/features/files/file.utils";
 import { httpService } from "@/lib/httpService";
-import { CheckCircle2, FileText, Loader2, Plus, Search } from "lucide-react";
+import { Download, FileText, Search } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-type Filter = "all" | "active" | "completed";
+const PAGE_SIZE = 12;
+const selectClass =
+  "h-9 rounded-lg border border-[#E0DBD0] bg-white px-2.5 text-sm text-[#1A1814] outline-none focus-visible:border-[#C0392B] focus-visible:ring-2 focus-visible:ring-[#C0392B]/30";
 
-export default function DashboardPage() {
+export default function FilesPage() {
   const router = useRouter();
   const [files, setFiles] = useState<File[]>([]);
-  const [filter, setFilter] = useState<Filter>("all");
-  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("all");
+  const [office, setOffice] = useState("all");
+  const [category, setCategory] = useState("all");
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
-    load();
+    httpService
+      .get<File[]>("/api/files")
+      .then(setFiles)
+      .catch((err) => console.error(err))
+      .finally(() => setLoading(false));
   }, []);
 
-  const load = async () => {
-    setLoading(true);
-    try {
-      // Load the full set once; counts and tab filtering are derived client-side
-      // so every tab's count stays accurate regardless of the active tab.
-      const data = await httpService.get<File[]>("/api/files");
-      setFiles(data);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const statuses = useMemo(
+    () => [...new Set(files.map((f) => f.currentStatus.name))].sort(),
+    [files],
+  );
+  const offices = useMemo(
+    () => [...new Set(files.map((f) => f.currentLocation.name))].sort(),
+    [files],
+  );
+  const categories = useMemo(() => [...new Set(files.map((f) => f.category))].sort(), [files]);
 
-  const total = files.length;
-  const active = files.filter((f) => !f.isCompleted).length;
-  const completed = files.filter((f) => f.isCompleted).length;
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return files.filter((f) => {
+      if (status !== "all" && f.currentStatus.name !== status) return false;
+      if (office !== "all" && f.currentLocation.name !== office) return false;
+      if (category !== "all" && f.category !== category) return false;
+      if (!q) return true;
+      return (
+        f.subjectName.toLowerCase().includes(q) ||
+        f.category.toLowerCase().includes(q) ||
+        formatFileNumber(f).toLowerCase().includes(q) ||
+        f.currentLocation.name.toLowerCase().includes(q) ||
+        f.currentStatus.name.toLowerCase().includes(q)
+      );
+    });
+  }, [files, search, status, office, category]);
 
-  const visible = files.filter((f) => {
-    // Tab filter
-    if (filter === "active" && f.isCompleted) return false;
-    if (filter === "completed" && !f.isCompleted) return false;
-    // Search filter
-    if (!search.trim()) return true;
-    const q = search.toLowerCase();
-    return (
-      matchesFileNumber(f, search) ||
-      f.subjectName.toLowerCase().includes(q) ||
-      f.category.toLowerCase().includes(q) ||
-      f.currentStatus.name.toLowerCase().includes(q) ||
-      f.currentLocation.name.toLowerCase().includes(q)
-    );
-  });
+  // Reset to first page whenever the filter set changes.
+  useEffect(() => {
+    setPage(1);
+  }, [search, status, office, category]);
+
+  const filtering =
+    search.trim() !== "" || status !== "all" || office !== "all" || category !== "all";
+
+  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const current = Math.min(page, pageCount);
+  const pageRows = visible.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
 
   const rel = (d: Date) => {
     const diff = Date.now() - new Date(d).getTime();
@@ -79,179 +84,215 @@ export default function DashboardPage() {
     return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
-  const STATS: { key: Filter; label: string; count: number; icon: typeof FileText; tint: string }[] = [
-    { key: "all", label: "Total Files", count: total, icon: FileText, tint: "text-foreground" },
-    { key: "active", label: "Active", count: active, icon: Loader2, tint: "text-warning" },
-    { key: "completed", label: "Completed", count: completed, icon: CheckCircle2, tint: "text-success" },
-  ];
+  const exportCsv = () => {
+    const header = ["Number", "Subject", "Category", "Location", "Status", "Updated"];
+    const rows = visible.map((f) => [
+      formatFileNumber(f),
+      f.subjectName,
+      f.category,
+      f.currentLocation.name,
+      f.currentStatus.name,
+      new Date(f.updatedAt).toISOString(),
+    ]);
+    const csv = [header, ...rows]
+      .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "files.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
-    <AppShell
-      title="Files"
-      actions={
-        <Button size="sm" onClick={() => router.push("/files/new")}>
-          <Plus className="size-4" />
-          New file
-        </Button>
-      }>
-      <div className="mx-auto max-w-5xl animate-fade-in space-y-6 px-6 py-6">
-        {/* ── Stat cards ── */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          {STATS.map(({ key, label, count, icon: Icon, tint }) => {
-            const isActive = filter === key;
-            return (
-              <Card
-                key={key}
-                role="button"
-                tabIndex={0}
-                onClick={() => setFilter(key)}
-                onKeyDown={(e) => e.key === "Enter" && setFilter(key)}
-                className={cn(
-                  "cursor-pointer gap-2 p-4 transition-all hover:ring-foreground/20",
-                  isActive && "ring-2 ring-primary"
-                )}>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-muted-foreground">{label}</span>
-                  <Icon className={cn("size-4", tint)} />
-                </div>
-                <span className="text-2xl font-bold tabular-nums leading-none">
-                  {loading ? "—" : count}
-                </span>
-              </Card>
-            );
-          })}
+    <AppShell title="Files">
+      <div className="mx-auto max-w-6xl px-5 py-6 sm:px-6">
+        {/* Heading */}
+        <div>
+          <h1 className="font-serif text-3xl leading-none text-[#1A1814]">
+            Files{" "}
+            <span className="font-mono text-lg text-[#6B6560]">
+              ({loading ? "—" : files.length})
+            </span>
+          </h1>
+          <p className="mt-1.5 text-sm text-[#6B6560]">
+            {filtering && !loading
+              ? `${visible.length} of ${files.length} files match`
+              : "All files across your organization"}
+          </p>
         </div>
 
-        {/* ── Toolbar ── */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative max-w-xs flex-1">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
+        {/* Toolbar */}
+        <div className="mt-6 flex flex-wrap items-center gap-2.5">
+          <div className="relative w-full sm:w-[280px]">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#6B6560]" />
+            <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by file no., subject…"
-              className="h-9 pl-9"
+              aria-label="Search files"
+              placeholder="Search by number, subject…"
+              className="h-9 w-full rounded-lg border border-[#E0DBD0] bg-white pl-9 pr-3 text-sm text-[#1A1814] outline-none placeholder:text-[#6B6560] focus-visible:border-[#C0392B] focus-visible:ring-2 focus-visible:ring-[#C0392B]/30"
             />
           </div>
 
-          <div className="inline-flex items-center gap-0.5 rounded-lg border bg-muted p-0.5">
-            {STATS.map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => setFilter(key)}
-                className={cn(
-                  "h-7 rounded-md px-3 text-xs font-medium transition-all",
-                  filter === key
-                    ? "bg-background text-foreground shadow-xs"
-                    : "text-muted-foreground hover:text-foreground"
-                )}>
-                {label.replace("Total Files", "All")}
-              </button>
+          <select aria-label="Filter by status" value={status} onChange={(e) => setStatus(e.target.value)} className={selectClass}>
+            <option value="all">All statuses</option>
+            {statuses.map((s) => (
+              <option key={s} value={s}>{s}</option>
             ))}
+          </select>
+          <select aria-label="Filter by office" value={office} onChange={(e) => setOffice(e.target.value)} className={selectClass}>
+            <option value="all">All offices</option>
+            {offices.map((o) => (
+              <option key={o} value={o}>{o}</option>
+            ))}
+          </select>
+          <select aria-label="Filter by category" value={category} onChange={(e) => setCategory(e.target.value)} className={selectClass}>
+            <option value="all">All categories</option>
+            {categories.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+
+          <button
+            onClick={exportCsv}
+            disabled={visible.length === 0}
+            className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-md px-3 text-sm font-medium text-[#6B6560] transition-colors hover:bg-[#EEE9DF] hover:text-[#1A1814] disabled:pointer-events-none disabled:opacity-40">
+            <Download className="size-4" />
+            Export CSV
+          </button>
+        </div>
+
+        {/* Table card */}
+        <div className="mt-4 overflow-hidden rounded-xl border border-[#E0DBD0] bg-white">
+          {/* Desktop table */}
+          <table className="hidden w-full text-left text-sm md:table">
+            <thead>
+              <tr className="text-xs uppercase tracking-wide text-[#6B6560]">
+                <th className="px-4 py-3 font-medium">#</th>
+                <th className="px-4 py-3 font-medium">Subject</th>
+                <th className="px-4 py-3 font-medium">Category</th>
+                <th className="px-4 py-3 font-medium">Location</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Updated</th>
+                <th className="px-4 py-3 text-right font-medium">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} cols={7} />)
+              ) : pageRows.length === 0 ? null : (
+                pageRows.map((f) => (
+                  <tr
+                    key={f.id}
+                    onClick={() => router.push(`/files/${f.id}`)}
+                    className="cursor-pointer border-t border-[#E0DBD0] transition-colors hover:bg-[#F7F4EE]">
+                    <td className="px-4 py-3">
+                      <FileNumberLabel file={f} className="text-sm text-[#6B6560]" />
+                    </td>
+                    <td className="px-4 py-3 font-medium text-[#1A1814]">{f.subjectName}</td>
+                    <td className="px-4 py-3 text-[#6B6560]">{f.category}</td>
+                    <td className="px-4 py-3 text-[#6B6560]">{f.currentLocation.name}</td>
+                    <td className="px-4 py-3">
+                      <FileStatusBadge status={f.currentStatus.name} />
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs text-[#6B6560]">{rel(f.updatedAt)}</td>
+                    <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-2">
+                        <Link
+                          href={`/files/${f.id}`}
+                          className="text-sm font-medium text-[#6B6560] transition-colors hover:text-[#1A1814]">
+                          View
+                        </Link>
+                        <Link
+                          href={`/files/${f.id}`}
+                          className="rounded-md border border-[#C0392B] px-2.5 py-1 text-xs font-semibold text-[#C0392B] transition-colors hover:bg-[#C0392B] hover:text-white">
+                          Route
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+
+          {/* Mobile cards */}
+          <div className="divide-y divide-[#E0DBD0] md:hidden">
+            {loading ? (
+              <div className="space-y-3 p-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="h-16 animate-pulse rounded-lg bg-[#EEE9DF]" />
+                ))}
+              </div>
+            ) : (
+              pageRows.map((f) => (
+                <Link key={f.id} href={`/files/${f.id}`} className="block px-4 py-3.5 active:bg-[#F7F4EE]">
+                  <div className="flex items-center justify-between gap-2">
+                    <FileNumberLabel file={f} className="text-sm text-[#6B6560]" />
+                    <FileStatusBadge status={f.currentStatus.name} />
+                  </div>
+                  <p className="mt-1.5 font-medium text-[#1A1814]">{f.subjectName}</p>
+                  <p className="mt-0.5 text-xs text-[#6B6560]">
+                    {f.category} · {f.currentLocation.name} · {rel(f.updatedAt)}
+                  </p>
+                </Link>
+              ))
+            )}
           </div>
 
-          {search && (
-            <span className="text-xs text-muted-foreground">
-              {visible.length} result{visible.length !== 1 ? "s" : ""}
-            </span>
+          {/* Empty state */}
+          {!loading && visible.length === 0 && (
+            <EmptyState
+              icon={FileText}
+              title={files.length === 0 ? "No files yet" : "No files match your filters"}
+              description={
+                files.length === 0
+                  ? "Log your first file to start tracking."
+                  : "Try adjusting your search or filters."
+              }
+              action={
+                files.length === 0 ? (
+                  <Link
+                    href="/files/new"
+                    className="inline-flex h-9 items-center rounded-md bg-[#C0392B] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#a83324]">
+                    Log a file
+                  </Link>
+                ) : undefined
+              }
+            />
           )}
         </div>
 
-        {/* ── Files table ── */}
-        <Card className="overflow-hidden p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead>Subject</TableHead>
-                <TableHead className="w-32">Office</TableHead>
-                <TableHead className="w-28 text-center">Status</TableHead>
-                <TableHead className="w-20 text-right">Updated</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                [1, 2, 3, 4, 5].map((i) => (
-                  <TableRow key={i}>
-                    <TableCell>
-                      <Skeleton className="h-4 w-48" />
-                      <Skeleton className="mt-1.5 h-3 w-24" />
-                    </TableCell>
-                    <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                    <TableCell><Skeleton className="mx-auto h-5 w-16 rounded-full" /></TableCell>
-                    <TableCell><Skeleton className="ml-auto h-3 w-10" /></TableCell>
-                  </TableRow>
-                ))
-              ) : visible.length === 0 ? (
-                <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={4}>
-                    <div className="flex flex-col items-center justify-center gap-2 py-14">
-                      <div className="flex size-11 items-center justify-center rounded-xl bg-muted">
-                        <FileText className="size-5 text-muted-foreground" />
-                      </div>
-                      <p className="text-sm font-medium">
-                        {search ? "No files match your search" : "No files yet"}
-                      </p>
-                      {!search && (
-                        <Button size="sm" className="mt-1" onClick={() => router.push("/files/new")}>
-                          <Plus className="size-4" />
-                          Create first file
-                        </Button>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                visible.map((file) => (
-                  <TableRow
-                    key={file.id}
-                    className="cursor-pointer"
-                    onClick={() => router.push(`/files/${file.id}`)}>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={cn(
-                            "size-1.5 shrink-0 rounded-full",
-                            file.isCompleted ? "bg-success" : "bg-warning"
-                          )}
-                        />
-                        <span className="truncate font-medium">{file.subjectName}</span>
-                      </div>
-                      <p className="mt-0.5 truncate pl-3.5 text-xs text-muted-foreground">
-                        <span className="font-mono text-foreground/70">{formatFileNumber(file)}</span>
-                        {" · "}
-                        {file.category}
-                      </p>
-                    </TableCell>
-                    <TableCell className="truncate text-xs text-muted-foreground">
-                      {file.currentLocation.name}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge
-                        variant="secondary"
-                        className={cn(
-                          "font-medium",
-                          file.isCompleted
-                            ? "bg-success/10 text-success"
-                            : "bg-warning/10 text-warning"
-                        )}>
-                        {file.currentStatus.name}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right text-xs tabular-nums text-muted-foreground">
-                      {rel(file.updatedAt)}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </Card>
-
-        {!loading && visible.length > 0 && (
-          <p className="text-center text-xs text-muted-foreground">
-            {visible.length} file{visible.length !== 1 ? "s" : ""}
-            {search && ` matching "${search}"`}
-          </p>
+        {/* Pagination */}
+        {!loading && pageCount > 1 && (
+          <div className="mt-5 flex items-center justify-center gap-1 text-sm">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={current === 1}
+              className="rounded-md px-3 py-1.5 font-medium text-[#6B6560] transition-colors hover:bg-[#EEE9DF] disabled:pointer-events-none disabled:opacity-40">
+              Prev
+            </button>
+            {Array.from({ length: pageCount }).map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setPage(i + 1)}
+                className={
+                  current === i + 1
+                    ? "rounded-md bg-[#C0392B] px-3 py-1.5 font-semibold text-white"
+                    : "rounded-md px-3 py-1.5 font-medium text-[#6B6560] transition-colors hover:bg-[#EEE9DF]"
+                }>
+                {i + 1}
+              </button>
+            ))}
+            <button
+              onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+              disabled={current === pageCount}
+              className="rounded-md px-3 py-1.5 font-medium text-[#6B6560] transition-colors hover:bg-[#EEE9DF] disabled:pointer-events-none disabled:opacity-40">
+              Next
+            </button>
+          </div>
         )}
       </div>
     </AppShell>

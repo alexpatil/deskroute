@@ -56,7 +56,7 @@ export function Button({
       type={type}
       onClick={onClick}
       disabled={isDisabled}
-      className={`${fullWidth ? "w-full" : "inline-flex"} items-center justify-center font-medium transition-all active:scale-[0.97] cursor-pointer shrink-0 ${sizeClass} ${
+      className={`${fullWidth ? "flex w-full" : "inline-flex"} items-center justify-center font-medium transition-all active:scale-[0.97] cursor-pointer shrink-0 ${sizeClass} ${
         isDisabled ? "opacity-40 cursor-not-allowed" : ""
       } ${className}`}
       style={getStyles()}>

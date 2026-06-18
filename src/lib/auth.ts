@@ -22,11 +22,27 @@ export const auth = betterAuth({
           google: {
             clientId: process.env.GOOGLE_CLIENT_ID,
             clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+            // Google sends the name split as given_name / family_name — capture
+            // both instead of collapsing them into a single display name.
+            mapProfileToUser: (profile) => ({
+              firstName: profile.given_name,
+              lastName: profile.family_name,
+            }),
           },
         }
       : undefined,
   user: {
     additionalFields: {
+      firstName: {
+        type: "string",
+        required: false,
+        input: true,
+      },
+      lastName: {
+        type: "string",
+        required: false,
+        input: true,
+      },
       role: {
         type: "string",
         defaultValue: "STAFF",
