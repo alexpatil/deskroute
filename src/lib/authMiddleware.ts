@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth";
+import { getTrialStatus } from "@/lib/trial";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "./prisma";
 
@@ -18,6 +19,20 @@ export async function requireAuth(request: NextRequest) {
 
   if (!user) {
     return { error: NextResponse.json({ message: "User not found" }, { status: 404 }), user: null };
+  }
+
+  // Trial gate: once an organization's 14-day trial expires, block its members
+  // from all data APIs. System admins (no org) and bypassed orgs are exempt.
+  if (
+    user.organization &&
+    !user.organization.bypassTrial &&
+    user.role !== "SYSTEM_ADMIN" &&
+    getTrialStatus(user.organization.trialEndsAt).expired
+  ) {
+    return {
+      error: NextResponse.json({ message: "Your free trial has expired", trialExpired: true }, { status: 403 }),
+      user: null,
+    };
   }
 
   return { user, error: null };

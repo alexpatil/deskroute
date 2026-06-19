@@ -6,10 +6,16 @@ const PUBLIC_PATHS = ["/login", "/register", "/api/auth"];
 // Exact paths anyone can visit without a session (e.g. the marketing home page).
 // Kept separate from PUBLIC_PATHS because those use startsWith — matching "/"
 // there would make every route public.
-const PUBLIC_EXACT_PATHS = ["/"];
+const PUBLIC_EXACT_PATHS = ["/", "/pricing"];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const sessionCookie = getSessionCookie(request);
+
+  // Already-authenticated users shouldn't see the auth forms — send them in.
+  if (sessionCookie && (pathname === "/login" || pathname === "/register")) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
 
   if (PUBLIC_EXACT_PATHS.includes(pathname)) {
     return NextResponse.next();
@@ -23,16 +29,10 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const sessionCookie = getSessionCookie(request);
-
   if (!sessionCookie) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("from", pathname);
     return NextResponse.redirect(loginUrl);
-  }
-
-  if (pathname === "/login") {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
   return NextResponse.next();

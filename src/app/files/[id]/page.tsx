@@ -3,13 +3,14 @@
 
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/Button";
-import { Card } from "@/components/Card";
 import { PageLoader } from "@/components/Loading";
+import { StatusBadge } from "@/components/StatusBadge";
 import { useToast } from "@/components/Toast";
 import type { FileWithHistory } from "@/features/files/file.types";
 import { formatFileNumber } from "@/features/files/file.utils";
 import { httpService } from "@/lib/httpService";
-import { Printer } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { ChevronDown, Printer } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -31,6 +32,34 @@ interface FileStatus {
   id: string;
   name: string;
   isEnabled: boolean;
+}
+
+/** Styled select with a non-interactive chevron (item 5). */
+function FieldSelect({
+  value,
+  onChange,
+  disabled,
+  children,
+}: {
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="relative">
+      <select
+        value={value}
+        onChange={onChange}
+        disabled={disabled}
+        className="w-full appearance-none rounded-lg border border-[#E0DBD0] bg-white px-4 py-2.5 pr-10 text-sm text-[#1A1814] focus:border-[#C0392B] focus:outline-none focus:ring-1 focus:ring-[#C0392B] disabled:cursor-not-allowed disabled:opacity-50">
+        {children}
+      </select>
+      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+        <ChevronDown className="h-4 w-4 text-[#6B6560]" />
+      </span>
+    </div>
+  );
 }
 
 export default function FileDetailPage() {
@@ -130,79 +159,60 @@ export default function FileDetailPage() {
     );
   }
 
+  const canEdit = !file.isCompleted || !!user?.isOwner;
+  const cardClass = "rounded-xl border border-[#E0DBD0] bg-white p-5 sm:p-6";
+
   return (
     <AppShell title="File Detail" backHref="/dashboard">
-      <main className='max-w-3xl mx-auto px-4 py-6 pb-10 space-y-4'>
-        <Card>
-          <div className='flex justify-between items-start mb-4'>
-            <div className='flex-1'>
-              <p className='text-xs font-mono mb-1' style={{ color: "var(--color-textMuted)" }}>
-                {formatFileNumber(file)}
-              </p>
-              <h2 className='text-xl font-bold mb-1' style={{ color: "var(--color-text)" }}>
-                {file.subjectName}
-              </h2>
-              <p className='text-sm font-medium' style={{ color: "var(--color-textMuted)" }}>
-                {file.category}
-              </p>
-            </div>
-            <span
-              className='px-3 py-1.5 text-xs font-bold rounded-full whitespace-nowrap ml-2'
-              style={{
-                backgroundColor: file.isCompleted ? "var(--color-successLight)" : "var(--color-warningLight)",
-                color: file.isCompleted ? "var(--color-success)" : "var(--color-warning)",
-              }}>
-              {file.isCompleted ? "Completed" : "Active"}
-            </span>
-          </div>
+      <main className="mx-auto max-w-2xl space-y-4 px-4 py-6 pb-10">
+        {/* Details */}
+        <section className={cardClass}>
+          <p className="font-mono text-xs uppercase tracking-widest text-[#6B6560]">
+            {formatFileNumber(file)}
+          </p>
+          <h1 className="mt-1 font-serif text-2xl font-semibold leading-tight text-[#1A1814]">
+            {file.subjectName}
+          </h1>
+          <p className="mt-1 text-sm text-[#6B6560]">{file.category}</p>
+
+          <div className="my-5 border-t border-[#E0DBD0]" />
 
           {isEditing ? (
-            <div className='space-y-4'>
+            <div className="space-y-4">
               <div>
-                <label className='block text-sm font-semibold mb-2' style={{ color: "var(--color-text)" }}>
-                  Current Location
-                </label>
-                <select
+                <label className="mb-1.5 block text-sm font-medium text-[#1A1814]">Current location</label>
+                <FieldSelect
                   value={editLocationId}
                   onChange={(e) => setEditLocationId(e.target.value)}
-                  disabled={file.isCompleted && !user?.isOwner}
-                  className='field field-lg field-select disabled:opacity-50 disabled:cursor-not-allowed'>
+                  disabled={file.isCompleted && !user?.isOwner}>
                   {locations.map((location) => (
                     <option key={location.id} value={location.id}>
                       {location.name} ({location.type})
                     </option>
                   ))}
-                </select>
+                </FieldSelect>
               </div>
               <div>
-                <label className='block text-sm font-semibold mb-2' style={{ color: "var(--color-text)" }}>
-                  Current Status
-                </label>
-                <select
+                <label className="mb-1.5 block text-sm font-medium text-[#1A1814]">Current status</label>
+                <FieldSelect
                   value={editStatusId}
                   onChange={(e) => setEditStatusId(e.target.value)}
-                  disabled={file.isCompleted && !user?.isOwner}
-                  className='field field-lg field-select disabled:opacity-50 disabled:cursor-not-allowed'>
+                  disabled={file.isCompleted && !user?.isOwner}>
                   {statuses.map((status) => (
                     <option key={status.id} value={status.id}>
                       {status.name}
                     </option>
                   ))}
-                </select>
+                </FieldSelect>
               </div>
               {file.isCompleted && !user?.isOwner && (
-                <div
-                  className='rounded-xl border-2 p-3 text-sm font-semibold'
-                  style={{ backgroundColor: "var(--color-warningLight)", borderColor: "var(--color-warning)", color: "var(--color-warning)" }}>
+                <p className="rounded-lg border border-[#E0DBD0] bg-[#F7F4EE] p-3 text-sm text-[#6B6560]">
                   This file is completed. Only the organization owner can modify it.
-                </div>
+                </p>
               )}
-              <div className='flex gap-2 pt-2'>
-                <Button onClick={handleUpdate} loading={updating} disabled={updating || (file.isCompleted && !user?.isOwner)}>
-                  Save Changes
-                </Button>
+              <div className="flex justify-end gap-2 pt-1">
                 <Button
-                  variant='secondary'
+                  variant="secondary"
                   onClick={() => {
                     setIsEditing(false);
                     setEditLocationId(file.currentLocationId);
@@ -211,121 +221,113 @@ export default function FileDetailPage() {
                   disabled={updating}>
                   Cancel
                 </Button>
+                <Button onClick={handleUpdate} loading={updating} disabled={updating || (file.isCompleted && !user?.isOwner)}>
+                  Save Changes
+                </Button>
               </div>
             </div>
           ) : (
-            <div className='space-y-3'>
-              <div className='rounded-xl p-3 border' style={{ backgroundColor: "var(--color-backgroundAlt)", borderColor: "var(--color-border)" }}>
-                <p className='text-xs font-semibold uppercase tracking-wide mb-1' style={{ color: "var(--color-textMuted)" }}>
-                  Current Location
-                </p>
-                <p className='text-base font-semibold' style={{ color: "var(--color-text)" }}>
-                  {file.currentLocation.name}
-                  {file.currentLocation.type !== "Branch" && (
-                    <span className='ml-2 text-sm font-normal' style={{ color: "var(--color-textMuted)" }}>
-                      ({file.currentLocation.type})
-                    </span>
-                  )}
-                </p>
+            <>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-[#6B6560]">Location</p>
+                  <p className="mt-1.5 text-sm font-medium text-[#1A1814]">
+                    {file.currentLocation.name}
+                    {file.currentLocation.type !== "Branch" && (
+                      <span className="text-[#6B6560]"> ({file.currentLocation.type})</span>
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-[#6B6560]">Status</p>
+                  <div className="mt-1.5">
+                    <StatusBadge status={file.currentStatus.name} />
+                  </div>
+                </div>
               </div>
-              <div className='rounded-xl p-3 border' style={{ backgroundColor: "var(--color-backgroundAlt)", borderColor: "var(--color-border)" }}>
-                <p className='text-xs font-semibold uppercase tracking-wide mb-1' style={{ color: "var(--color-textMuted)" }}>
-                  Current Status
-                </p>
-                <p className='text-base font-semibold' style={{ color: "var(--color-text)" }}>
-                  {file.currentStatus.name}
-                </p>
-              </div>
-            </div>
+
+              {canEdit && (
+                <div className="mt-6 flex justify-end">
+                  <Button
+                    variant={file.isCompleted ? "secondary" : "primary"}
+                    onClick={() => setIsEditing(true)}>
+                    {file.isCompleted ? "Update completed file" : "Update location & status"}
+                  </Button>
+                </div>
+              )}
+            </>
           )}
-        </Card>
+        </section>
 
-        {!isEditing && !file.isCompleted && (
-          <div className='flex justify-end'>
-            <Button onClick={() => setIsEditing(true)}>Update Location & Status</Button>
-          </div>
-        )}
-
-        {!isEditing && file.isCompleted && user?.isOwner && (
-          <div className='flex justify-end'>
-            <Button onClick={() => setIsEditing(true)} variant='secondary'>
-              Update Completed File (Owner Only)
-            </Button>
-          </div>
-        )}
-
-        {/* QR Receipt — available for any file, any time */}
-        <div className="rounded-xl border border-[#E0DBD0] bg-white p-5">
+        {/* QR receipt */}
+        <section className={cardClass}>
           <div className="flex items-center gap-4">
-            <div className="shrink-0 rounded-lg border border-[#E0DBD0] bg-white p-2">
-              <QRCode value={origin ? `${origin}/files/${file.id}` : ""} size={84} bgColor="#ffffff" fgColor="#1A1814" />
+            <div className="shrink-0 rounded-lg border border-[#E0DBD0] p-1.5">
+              <QRCode value={origin ? `${origin}/files/${file.id}` : ""} size={72} bgColor="#ffffff" fgColor="#1A1814" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="font-mono text-lg tracking-wider text-[#1A1814]">{formatFileNumber(file)}</p>
+              <p className="text-sm font-semibold text-[#1A1814]">Scan to track</p>
               <p className="mt-0.5 text-xs text-[#6B6560]">
                 Anyone can scan this to see the file&apos;s live status.
               </p>
             </div>
+            <Link
+              href={`/files/${file.id}/receipt`}
+              className="inline-flex h-9 shrink-0 items-center gap-2 rounded-md border border-[#C0392B] px-3 text-sm font-semibold text-[#C0392B] transition-colors hover:bg-[#C0392B] hover:text-white">
+              <Printer className="size-4" />
+              <span className="hidden sm:inline">Print</span>
+            </Link>
           </div>
-          <Link
-            href={`/files/${file.id}/receipt`}
-            className="mt-4 flex h-9 w-full items-center justify-center gap-2 rounded-md border border-[#C0392B] text-sm font-semibold text-[#C0392B] transition-colors hover:bg-[#C0392B] hover:text-white">
-            <Printer className="size-4" />
-            Print receipt
-          </Link>
-        </div>
+        </section>
 
-        <Card>
-          <h3 className='text-lg font-bold mb-4' style={{ color: "var(--color-text)" }}>
-            History
-          </h3>
-          <div className='space-y-4'>
-            {file.history.length === 0 ? (
-              <p className='text-center py-4 text-sm' style={{ color: "var(--color-textMuted)" }}>
-                No history available
-              </p>
-            ) : (
-              file.history.map((entry) => (
-                <div key={entry.id} className='flex gap-3 pb-4 border-b last:border-b-0' style={{ borderColor: "var(--color-borderLight)" }}>
-                  <div className='shrink-0 w-2.5 h-2.5 mt-1.5 rounded-full' style={{ backgroundColor: "var(--color-primary)" }} />
-                  <div className='flex-1 min-w-0'>
-                    <div className='flex flex-col gap-2'>
-                      <div className='flex-1'>
-                        {entry.locationChanged && entry.statusChanged ? (
-                          <>
-                            <p className='font-semibold text-sm mb-1' style={{ color: "var(--color-text)" }}>
-                              Moved: {entry.fromLocation?.name} → {entry.toLocation.name}
-                            </p>
-                            <p className='text-sm' style={{ color: "var(--color-textMuted)" }}>
-                              Status: {entry.oldStatusName} → {entry.newStatusName}
-                            </p>
-                          </>
-                        ) : entry.locationChanged ? (
-                          <p className='font-semibold text-sm' style={{ color: "var(--color-text)" }}>
-                            Moved: {entry.fromLocation?.name} → {entry.toLocation.name}
-                          </p>
-                        ) : entry.statusChanged ? (
-                          <p className='font-semibold text-sm' style={{ color: "var(--color-text)" }}>
-                            Status changed: {entry.oldStatusName} → {entry.newStatusName}
-                          </p>
-                        ) : (
-                          <p className='text-sm' style={{ color: "var(--color-textMuted)" }}>
-                            Updated at {entry.toLocation.name}
-                          </p>
-                        )}
-                      </div>
-                      <p
-                        className='text-xs font-medium px-2 py-1 rounded-lg self-start'
-                        style={{ backgroundColor: "var(--color-backgroundAlt)", color: "var(--color-textMuted)" }}>
-                        {formatDate(entry.createdAt)}
-                      </p>
-                    </div>
+        {/* Route history */}
+        <section className={cardClass}>
+          <h2 className="mb-5 text-xs font-semibold uppercase tracking-wide text-[#6B6560]">
+            Route history
+          </h2>
+          {file.history.length === 0 ? (
+            <p className="py-4 text-center text-sm text-[#6B6560]">No history yet</p>
+          ) : (
+            <div>
+              {file.history.map((entry, i) => {
+                const isLast = i === file.history.length - 1;
+                const isOrigin = isLast; // oldest entry = the file's origin
+                let label: string;
+                let secondary: string;
+                if (entry.locationChanged && entry.statusChanged) {
+                  label = `Moved to ${entry.toLocation.name}`;
+                  secondary = `Status: ${entry.oldStatusName} → ${entry.newStatusName}`;
+                } else if (entry.locationChanged) {
+                  label = `Moved to ${entry.toLocation.name}`;
+                  secondary = entry.fromLocation ? `From ${entry.fromLocation.name}` : entry.toLocation.name;
+                } else if (entry.statusChanged) {
+                  label = "Status changed";
+                  secondary = `${entry.oldStatusName} → ${entry.newStatusName}`;
+                } else {
+                  label = "File created";
+                  secondary = entry.toLocation.name;
+                }
+                return (
+                  <div key={entry.id} className="relative pb-5 pl-8 last:pb-0">
+                    {!isLast && (
+                      <span className="absolute bottom-0 left-[11px] top-6 w-px bg-[#E0DBD0]" />
+                    )}
+                    <span
+                      className={cn(
+                        "absolute left-0 top-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2 bg-white",
+                        isOrigin ? "border-[#E0DBD0]" : "border-[#C0392B]",
+                      )}>
+                      {!isOrigin && <span className="h-2 w-2 rounded-full bg-[#C0392B]" />}
+                    </span>
+                    <p className="text-sm font-medium text-[#1A1814]">{label}</p>
+                    <p className="mt-0.5 text-xs text-[#6B6560]">{secondary}</p>
+                    <p className="mt-1 text-xs text-[#6B6560]">{formatDate(entry.createdAt)}</p>
                   </div>
-                </div>
-              ))
-            )}
-          </div>
-        </Card>
+                );
+              })}
+            </div>
+          )}
+        </section>
       </main>
     </AppShell>
   );

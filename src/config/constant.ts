@@ -13,10 +13,11 @@ export const INDUSTRIES = [
 ];
 
 export const DEFAULT_BRANCH_TYPES = [
-  "Branch",
   "Office",
-  "Warehouse",
+  "Branch",
+  "Desk",
   "Department",
+  "Warehouse",
   "Site",
   "Counter",
 ];

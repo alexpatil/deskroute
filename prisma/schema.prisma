@@ -69,6 +69,10 @@ model Organization {
     settings     Json         @default("{}")
     plan         Plan         @default(FREE)
     isActive     Boolean      @default(true)
+    // 14-day free trial: set when the organization is created. Null is treated
+    // as expired by getTrialStatus. bypassTrial exempts an org from the gate.
+    trialEndsAt  DateTime?
+    bypassTrial  Boolean      @default(false)
     // Monotonic counter used to assign human-friendly, per-organization
     // sequential file numbers (see File.fileNumber). Incremented atomically.
     fileSeq      Int          @default(0)

@@ -69,7 +69,7 @@ export default function RegisterPage() {
         {/* Trust strip */}
         <div className="mb-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 font-mono text-[12px] text-[#6B6560]">
           <span>✓ No credit card required</span>
-          <span>✓ Free plan</span>
+          <span>✓ 14-day free trial</span>
           <span>✓ Works without scanners</span>
         </div>
 

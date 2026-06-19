@@ -29,7 +29,7 @@ export default function LocationsPage() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({ name: "", type: "Branch" });
+  const [formData, setFormData] = useState({ name: "", type: "Office" });
   const [formError, setFormError] = useState("");
   const [creating, setCreating] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Location | null>(null);
@@ -51,11 +51,11 @@ export default function LocationsPage() {
     try {
       await httpService.post("/api/locations", formData);
       setShowForm(false);
-      setFormData({ name: "", type: "Branch" });
-      toast("Branch created", "success");
+      setFormData({ name: "", type: "Office" });
+      toast("Location created", "success");
       await load();
     } catch (err: any) {
-      setFormError(err instanceof Error ? err.message : "Failed to create branch");
+      setFormError(err instanceof Error ? err.message : "Failed to create location");
     } finally { setCreating(false); }
   };
 
@@ -76,10 +76,10 @@ export default function LocationsPage() {
   if (loading) return <PageLoader />;
 
   return (
-    <AppShell title="Offices & Branches" backHref="/dashboard">
+    <AppShell title="Locations" backHref="/dashboard">
       <ConfirmModal
         isOpen={!!deleteTarget}
-        title="Delete branch?"
+        title="Delete location?"
         message={`"${deleteTarget?.name ?? ""}" will be permanently removed.`}
         confirmLabel={deleting ? "Deleting…" : "Delete"}
         onConfirm={handleDelete}
@@ -90,8 +90,8 @@ export default function LocationsPage() {
         {/* Page header */}
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h1 className="font-serif text-2xl text-[#1A1814]">Offices</h1>
-            <p className="text-sm text-[#6B6560]">Branches files move between</p>
+            <h1 className="font-serif text-2xl text-[#1A1814]">Locations</h1>
+            <p className="text-sm text-[#6B6560]">Offices, branches, desks — anywhere files move</p>
           </div>
           {showForm ? (
             <button
@@ -104,7 +104,7 @@ export default function LocationsPage() {
               onClick={() => setShowForm(true)}
               className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[#C0392B] px-3.5 text-sm font-semibold text-white transition-colors hover:bg-[#a83324]">
               <Plus className="size-4" />
-              Add office
+              Add location
             </button>
           )}
         </div>
@@ -115,7 +115,7 @@ export default function LocationsPage() {
             className="rounded-xl border p-5 animate-fade-in"
             style={{ backgroundColor: "var(--color-surface)", borderColor: "var(--color-border)" }}>
             <h2 className="text-sm font-semibold mb-4" style={{ color: "var(--color-text)" }}>
-              New Branch
+              New location
             </h2>
 
             {formError && (
@@ -128,7 +128,7 @@ export default function LocationsPage() {
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold mb-1.5" style={{ color: "var(--color-textMuted)" }}>
-                    Branch Name
+                    Location name
                   </label>
                   <input
                     ref={nameRef}
@@ -136,7 +136,7 @@ export default function LocationsPage() {
                     required
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="e.g., Main Office, North Branch"
+                    placeholder="e.g., Reception, Records Desk, North Branch"
                     className="field"
                   />
                 </div>

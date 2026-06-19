@@ -1,10 +1,12 @@
 "use client";
 
+import { TrialBanner } from "@/components/TrialBanner";
 import { Input } from "@/components/ui/input";
 import type { File } from "@/features/files/file.types";
 import { formatFileNumber, matchesFileNumber } from "@/features/files/file.utils";
 import { authClient } from "@/lib/auth-client";
 import { httpService } from "@/lib/httpService";
+import type { TrialStatus } from "@/lib/trial";
 import { cn } from "@/lib/utils";
 import {
   Building2,
@@ -13,6 +15,7 @@ import {
   LogOut,
   type LucideIcon,
   Plus,
+  Route,
   Search,
   Settings,
   Users,
@@ -31,6 +34,9 @@ interface ShellUser {
   canManageLocations: boolean;
   canConfigureStatuses: boolean;
   canManageStaff: boolean;
+  hasOrganization?: boolean;
+  bypassTrial?: boolean;
+  trial?: TrialStatus;
 }
 
 /** Prefer a real name (first/last, then full name), falling back to the email. */
@@ -48,6 +54,11 @@ function initialsOf(user: ShellUser | null): string {
   const name = displayNameOf(user);
   return name[0]?.toUpperCase() ?? "?";
 }
+
+// AppShell is mounted per-page, so without this each navigation would re-fetch
+// /api/auth/me and flash the sidebar name/role back to empty. Caching the last
+// result at module scope lets remounts paint instantly while still revalidating.
+let cachedUser: ShellUser | null = null;
 interface AppShellProps {
   children: ReactNode;
   title: string;
@@ -67,7 +78,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Files", icon: FileText, always: true },
-  { href: "/locations", label: "Offices", icon: Building2, perm: "canManageLocations" },
+  { href: "/locations", label: "Locations", icon: Building2, perm: "canManageLocations" },
   // Staff management is owner-only on the API (requireOwner), so gate the nav
   // the same way instead of by canManageStaff (which the API never honors).
   { href: "/staff", label: "Team", icon: Users, ownerOnly: true },
@@ -85,6 +96,9 @@ function useNavItems(user: ShellUser | null) {
     return user.isOwner || user[item.perm];
   });
 }
+
+// Root navigation pages never show the topbar back arrow.
+const ROOT_NAV_PATHS = ["/dashboard", "/locations", "/staff", "/settings"];
 
 function isActive(pathname: string, href: string) {
   if (href === "/dashboard") return pathname === "/dashboard" || pathname === "/";
@@ -109,7 +123,7 @@ function Sidebar({ user }: { user: ShellUser | null }) {
       {/* Logo */}
       <Link href="/dashboard" className="flex items-center gap-2.5 px-5 py-5">
         <span className="flex size-7 items-center justify-center rounded-md bg-[#C0392B]">
-          <FileText className="size-4 text-white" />
+          <Route className="size-4 text-white" />
         </span>
         <span className="font-serif text-2xl leading-none">DeskRoute</span>
       </Link>
@@ -319,28 +333,45 @@ function HeaderSearch() {
 /* ─── AppShell ───────────────────────────────────────────────────────────── */
 export function AppShell({ children, title, actions, backHref }: AppShellProps) {
   const router = useRouter();
-  const [user, setUser] = useState<ShellUser | null>(null);
+  const pathname = usePathname();
+  const [user, setUser] = useState<ShellUser | null>(cachedUser);
 
   useEffect(() => {
     httpService
       .get<ShellUser>("/api/auth/me")
-      .then(setUser)
+      .then((u) => {
+        cachedUser = u;
+        setUser(u);
+        // Expired trial → send the user to the upgrade wall (org members only;
+        // owners with bypass and system admins are exempt).
+        if (u.hasOrganization && !u.bypassTrial && u.trial?.expired) {
+          router.replace("/trial-expired");
+        }
+      })
       .catch(() => {});
-  }, []);
+  }, [router]);
+
+  const showTrialBanner = !!user?.hasOrganization && !user.bypassTrial && !!user.trial?.active;
+  // Show the back arrow only on child pages (not the root nav destinations).
+  const showBack = !!backHref && !ROOT_NAV_PATHS.includes(pathname);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#F7F4EE] text-[#1A1814]">
-      {/* Desktop sidebar */}
-      <aside className="hidden w-60 shrink-0 lg:block">
-        <Sidebar user={user} />
-      </aside>
+    <div className="flex h-screen flex-col overflow-hidden bg-[#F7F4EE] text-[#1A1814]">
+      {/* Trial banner — full width, pushes the rest of the shell down */}
+      {showTrialBanner && <TrialBanner daysLeft={user!.trial!.daysLeft} />}
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        {/* Desktop sidebar */}
+        <aside className="hidden w-60 shrink-0 lg:block">
+          <Sidebar user={user} />
+        </aside>
+
+        <div className="flex min-w-0 flex-1 flex-col">
         {/* Top bar */}
         <header className="z-30 flex h-14 shrink-0 items-center gap-3 border-b border-[#E0DBD0] bg-white px-4 sm:px-6">
-          {backHref ? (
+          {showBack ? (
             <button
-              onClick={() => router.push(backHref)}
+              onClick={() => router.push(backHref!)}
               aria-label="Back"
               className="-ml-1 flex size-8 items-center justify-center rounded-md text-[#6B6560] transition-colors hover:bg-[#F7F4EE] hover:text-[#1A1814]">
               <ChevronLeft className="size-5" />
@@ -362,8 +393,9 @@ export function AppShell({ children, title, actions, backHref }: AppShellProps) 
           </div>
         </header>
 
-        {/* Main */}
-        <main className="flex-1 overflow-y-auto bg-[#F7F4EE] pb-24 lg:pb-0">{children}</main>
+          {/* Main */}
+          <main className="flex-1 overflow-y-auto bg-[#F7F4EE] pb-24 lg:pb-0">{children}</main>
+        </div>
       </div>
 
       <MobileTabBar user={user} />

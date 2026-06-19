@@ -1,5 +1,6 @@
 // features/organization/organization.service.ts
 import prisma from "@/lib/prisma";
+import { trialEndDate } from "@/lib/trial";
 import bcrypt from "bcryptjs";
 import { randomUUID } from "crypto";
 import type {
@@ -28,6 +29,8 @@ function toOrg(org: any): Organization {
     plan: org.plan ?? "FREE",
     ownerUserId: org.ownerUserId,
     isActive: org.isActive ?? true,
+    trialEndsAt: org.trialEndsAt ?? null,
+    bypassTrial: org.bypassTrial ?? false,
     createdAt: org.createdAt,
   };
 }
@@ -47,6 +50,7 @@ export const organizationService = {
           slug,
           industry: data.industry ?? null,
           ownerUserId: "temp",
+          trialEndsAt: trialEndDate(),
         },
       });
 
@@ -117,6 +121,7 @@ export const organizationService = {
           slug,
           industry: data.type ?? null,
           ownerUserId: userId,
+          trialEndsAt: trialEndDate(),
           settings: {
             logoUrl: data.logoUrl ?? null,
             primaryContact: data.primaryContact ?? null,

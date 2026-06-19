@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { getTrialStatus } from "@/lib/trial";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest) {
@@ -20,6 +21,8 @@ export async function GET(request: NextRequest) {
     }
 
     const isOwner = user.organization?.ownerUserId === user.id;
+    const bypassTrial = user.organization?.bypassTrial ?? false;
+    const trial = getTrialStatus(user.organization?.trialEndsAt ?? null);
 
     return NextResponse.json({
       id: user.id,
@@ -29,6 +32,8 @@ export async function GET(request: NextRequest) {
       lastName: user.lastName,
       role: user.role,
       hasOrganization: !!user.organizationId,
+      trial,
+      bypassTrial,
       isOwner,
       isSystemAdmin: user.role === "SYSTEM_ADMIN",
       assignedLocationId: user.assignedLocationId,

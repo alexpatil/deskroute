@@ -29,6 +29,8 @@ export interface Organization {
   plan: string;
   ownerUserId: string;
   isActive: boolean;
+  trialEndsAt: Date | null;
+  bypassTrial: boolean;
   createdAt: Date;
 }
 

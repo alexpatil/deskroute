@@ -3,7 +3,7 @@
 import { AppShell } from "@/components/AppShell";
 import { EmptyState } from "@/components/EmptyState";
 import { FileNumberLabel } from "@/components/FileNumberLabel";
-import { FileStatusBadge } from "@/components/FileStatusBadge";
+import { StatusBadge } from "@/components/StatusBadge";
 import { SkeletonRow } from "@/components/SkeletonRow";
 import type { File } from "@/features/files/file.types";
 import { formatFileNumber } from "@/features/files/file.utils";
@@ -167,7 +167,16 @@ export default function FilesPage() {
         {/* Table card */}
         <div className="mt-4 overflow-hidden rounded-xl border border-[#E0DBD0] bg-white">
           {/* Desktop table */}
-          <table className="hidden w-full text-left text-sm md:table">
+          <table className="hidden w-full table-fixed text-left text-sm md:table">
+            <colgroup>
+              <col className="w-20" />
+              <col />
+              <col className="w-40" />
+              <col className="w-35" />
+              <col className="w-30" />
+              <col className="w-30" />
+              <col className="w-35" />
+            </colgroup>
             <thead>
               <tr className="text-xs uppercase tracking-wide text-[#6B6560]">
                 <th className="px-4 py-3 font-medium">#</th>
@@ -191,26 +200,19 @@ export default function FilesPage() {
                     <td className="px-4 py-3">
                       <FileNumberLabel file={f} className="text-sm text-[#6B6560]" />
                     </td>
-                    <td className="px-4 py-3 font-medium text-[#1A1814]">{f.subjectName}</td>
-                    <td className="px-4 py-3 text-[#6B6560]">{f.category}</td>
-                    <td className="px-4 py-3 text-[#6B6560]">{f.currentLocation.name}</td>
+                    <td className="truncate px-4 py-3 font-medium text-[#1A1814]">{f.subjectName}</td>
+                    <td className="truncate px-4 py-3 text-[#6B6560]">{f.category}</td>
+                    <td className="truncate px-4 py-3 text-[#6B6560]">{f.currentLocation.name}</td>
                     <td className="px-4 py-3">
-                      <FileStatusBadge status={f.currentStatus.name} />
+                      <StatusBadge status={f.currentStatus.name} />
                     </td>
                     <td className="px-4 py-3 font-mono text-xs text-[#6B6560]">{rel(f.updatedAt)}</td>
                     <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-2">
-                        <Link
-                          href={`/files/${f.id}`}
-                          className="text-sm font-medium text-[#6B6560] transition-colors hover:text-[#1A1814]">
-                          View
-                        </Link>
-                        <Link
-                          href={`/files/${f.id}`}
-                          className="rounded-md border border-[#C0392B] px-2.5 py-1 text-xs font-semibold text-[#C0392B] transition-colors hover:bg-[#C0392B] hover:text-white">
-                          Route
-                        </Link>
-                      </div>
+                      <Link
+                        href={`/files/${f.id}`}
+                        className="inline-flex items-center gap-1 rounded-md bg-[#C0392B] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#a83324]">
+                        Route →
+                      </Link>
                     </td>
                   </tr>
                 ))
@@ -231,7 +233,7 @@ export default function FilesPage() {
                 <Link key={f.id} href={`/files/${f.id}`} className="block px-4 py-3.5 active:bg-[#F7F4EE]">
                   <div className="flex items-center justify-between gap-2">
                     <FileNumberLabel file={f} className="text-sm text-[#6B6560]" />
-                    <FileStatusBadge status={f.currentStatus.name} />
+                    <StatusBadge status={f.currentStatus.name} />
                   </div>
                   <p className="mt-1.5 font-medium text-[#1A1814]">{f.subjectName}</p>
                   <p className="mt-0.5 text-xs text-[#6B6560]">

@@ -1,22 +1,22 @@
 import { HeroQr } from "@/components/HeroQr";
 import { LandingNav } from "@/components/LandingNav";
 import { cn } from "@/lib/utils";
-import type { Metadata } from "next";
-import Link from "next/link";
-import { Instrument_Serif } from "next/font/google";
 import {
   ArrowRight,
   Building2,
   Check,
   ChevronDown,
-  FileText,
   GitBranch,
   Hash,
+  Lock,
   QrCode,
   Route,
   ShieldCheck,
-  Workflow,
+  Workflow
 } from "lucide-react";
+import type { Metadata } from "next";
+import { Instrument_Serif } from "next/font/google";
+import Link from "next/link";
 
 const serif = Instrument_Serif({
   weight: "400",
@@ -249,8 +249,8 @@ const FAQS = [
     a: "Yes. Scope staff to their own branch or grant fine-grained, organization-wide permissions. Every action is recorded in an audit trail.",
   },
   {
-    q: "Is there a free plan?",
-    a: "Yes. You can create your organization and start tracking files for free — no credit card required. Upgrade only when your team grows.",
+    q: "Is there a free trial?",
+    a: "Yes — every account starts with a 14-day free trial, no credit card required. After that, pick the plan that fits your team.",
   },
 ];
 
@@ -297,15 +297,13 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Trust strip — the single industry mention */}
+          {/* Early-stage, honest framing (no customer claims yet) */}
           <div id="use-cases" className="border-t border-[#E0DBD0] bg-white">
-            <div className="mx-auto flex max-w-6xl flex-col items-center gap-3 px-5 py-5 sm:flex-row sm:justify-center sm:gap-2 sm:px-6">
-              <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-[#6B6560]">
-                Trusted by teams in:
+            <div className="mx-auto flex max-w-6xl flex-col items-center gap-1 px-5 py-5 text-center sm:flex-row sm:justify-center sm:gap-2 sm:px-6">
+              <span className="text-sm font-medium text-[#1A1814]">
+                Built for file-heavy teams.
               </span>
-              <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-[#1A1814]">
-                Healthcare · Government · Legal · Finance · Education
-              </span>
+              <span className="text-sm text-[#6B6560]">Be among the first to try it.</span>
             </div>
           </div>
         </section>
@@ -394,7 +392,7 @@ export default function Home() {
               <StatItem value="∞" label="Offices & branches" />
             </div>
             <p className="mt-8 text-center font-mono text-[11px] uppercase tracking-[0.16em] text-[#6B6560]">
-              Across organizations in early access.
+              How DeskRoute is built to work.
             </p>
           </div>
         </section>
@@ -533,20 +531,6 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ── Testimonial ── */}
-        <section className="border-b border-[#E0DBD0] bg-[#EEE9DF]">
-          <div className="mx-auto max-w-3xl px-5 py-20 text-center sm:px-6">
-            <p className={cn(display, "text-6xl leading-none text-[#C0392B]")}>“</p>
-            <blockquote className={cn(display, "mt-2 text-2xl leading-snug text-[#1A1814] sm:text-3xl")}>
-              We stopped losing files overnight. Anyone can scan the receipt and see exactly which
-              office a file is in — no more walking floor to floor asking around.
-            </blockquote>
-            <p className="mt-8 font-mono text-xs uppercase tracking-[0.14em] text-[#6B6560]">
-              Priya Nair — Records Director, Regional Registry Office
-            </p>
-          </div>
-        </section>
-
         {/* ── FAQ ── */}
         <section id="faq" className="border-b border-[#E0DBD0]">
           <div className="mx-auto max-w-3xl px-5 py-20 sm:px-6">
@@ -556,6 +540,22 @@ export default function Home() {
                 <FaqItem key={f.q} q={f.q} a={f.a} />
               ))}
             </div>
+          </div>
+        </section>
+
+        {/* ── Privacy / security ── */}
+        <section className="border-b border-[#E0DBD0] bg-[#EEE9DF]">
+          <div className="mx-auto max-w-3xl px-5 py-20 text-center sm:px-6">
+            <div className="flex items-center justify-center gap-2.5">
+              <Lock className="size-5 text-[#C0392B]" />
+              <h2 className={cn(display, "text-3xl text-[#1A1814] sm:text-4xl")}>
+                Your files. Your data. Nobody else&apos;s.
+              </h2>
+            </div>
+            <p className="mx-auto mt-4 max-w-xl text-[#6B6560]">
+              DeskRoute does not sell, share, or analyze your organization&apos;s data. Everything
+              stays within your account — encrypted, private, and fully under your control.
+            </p>
           </div>
         </section>
 
@@ -583,7 +583,7 @@ export default function Home() {
               </Link>
             </div>
             <p className="mt-6 font-mono text-[11px] uppercase tracking-[0.14em] text-[#6B6560]">
-              No credit card required · Free plan available
+              14-day free trial · No credit card required
             </p>
           </div>
         </section>
@@ -596,7 +596,7 @@ export default function Home() {
             <div>
               <div className="flex items-center gap-2.5">
                 <span className="flex size-8 items-center justify-center rounded-md bg-[#1A1814]">
-                  <FileText className="size-4 text-[#F7F4EE]" />
+                  <Route className="size-4 text-[#F7F4EE]" />
                 </span>
                 <span className="text-lg font-semibold tracking-tight text-[#1A1814]">DeskRoute</span>
               </div>
